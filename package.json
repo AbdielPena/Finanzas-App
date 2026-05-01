@@ -1,0 +1,14 @@
+{
+  "name": "finanzapp",
+  "version": "1.0.0",
+  "description": "Aplicación de finanzas personales",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
