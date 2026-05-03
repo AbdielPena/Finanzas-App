@@ -7,6 +7,7 @@ import { generateId, formatMoney } from '../utils.js';
 import { openModal, closeModal, showToast, confirmDialog, emptyState } from '../components.js';
 import { calcAccountBalance } from '../balance_engine.js';
 import { enforceLimit } from '../plans_engine.js';
+import { openTransactionHistory } from '../transaction_history.js';
 
 const BANK_COLORS = ['#6c63ff','#00d4aa','#42a5f5','#ff7043','#ab47bc','#26a69a','#ec407a','#ffa726','#5c6bc0','#8d6e63'];
 
@@ -160,7 +161,7 @@ export default function renderAccounts() {
             const c1 = bank?.color || 'var(--accent)';
             const c2 = bank?.color ? `${bank.color}CC` : 'var(--accent-hover)';
             return `
-              <div class="wallet-card" style="--wc-a:${c1};--wc-b:${c2}" data-filter-bank="${bank?.id || ''}">
+              <div class="wallet-card" style="--wc-a:${c1};--wc-b:${c2};cursor:pointer" data-show-acc-history="${acc.id}" title="Ver historial de transacciones">
                 <div>
                   <div class="wallet-card-bank">${bank?.nombre || 'Sin banco'}</div>
                   <div class="wallet-card-name">${acc.nombre}</div>
@@ -249,10 +250,13 @@ export default function renderAccounts() {
                             const bal = calcAccountBalance(acc.id);
                             return `
                               <tr>
-                                <td style="padding-left:16px"><strong style="color:var(--text-primary)">${acc.nombre}</strong></td>
+                                <td style="padding-left:16px">
+                                  <button type="button" class="link-as-text" data-show-acc-history="${acc.id}" title="Ver historial de transacciones" style="background:none;border:0;padding:0;color:var(--text-primary);font-weight:600;cursor:pointer;text-align:left;font:inherit">${acc.nombre}</button>
+                                </td>
                                 <td><span class="badge badge-neutral">${acc.tipo || 'General'}</span></td>
                                 <td class="right cell-amount ${bal >= 0 ? 'income' : 'expense'}">${formatMoney(bal)}</td>
                                 <td class="cell-actions">
+                                  <button class="cell-action-btn" data-show-acc-history="${acc.id}" title="Ver historial">${icon('fileText', 16)}</button>
                                   <button class="cell-action-btn" data-edit-acc="${acc.id}" title="Editar">${icon('edit', 16)}</button>
                                   <button class="cell-action-btn danger" data-delete-acc="${acc.id}" title="Eliminar">${icon('trash', 16)}</button>
                                 </td>
@@ -288,10 +292,13 @@ export default function renderAccounts() {
                             const consumido = parseFloat(card.saldoUsado) || 0;
                             return `
                               <tr>
-                                <td style="padding-left:16px"><strong style="color:var(--text-primary)">${card.nombre}</strong></td>
+                                <td style="padding-left:16px">
+                                  <button type="button" data-show-card-history="${card.id}" title="Ver historial de transacciones" style="background:none;border:0;padding:0;color:var(--text-primary);font-weight:600;cursor:pointer;text-align:left;font:inherit">${card.nombre}</button>
+                                </td>
                                 <td style="color:var(--text-secondary)">${formatMoney(limite)}</td>
                                 <td class="right cell-amount expense">${formatMoney(consumido)}</td>
                                 <td class="cell-actions">
+                                  <button class="cell-action-btn" data-show-card-history="${card.id}" title="Ver historial">${icon('fileText', 16)}</button>
                                   <button class="cell-action-btn summary-link" onclick="location.hash='#/cards'" title="Ir a Tarjetas">${icon('eye', 16)}</button>
                                 </td>
                               </tr>
@@ -344,6 +351,22 @@ export default function renderAccounts() {
     page.querySelectorAll('[data-delete-acc]').forEach(btn => btn.addEventListener('click', async () => {
       const ok = await confirmDialog('¿Eliminar cuenta bancaria?', 'Solo se borrará el registro de la cuenta, pero las transacciones asociadas quedarán huérfanas.');
       if (ok) { store.remove('accounts', btn.dataset.deleteAcc); showToast('success', 'Cuenta eliminada'); render(); }
+    }));
+
+    // Mostrar historial de transacciones (cuentas y tarjetas dentro del listado de bancos)
+    page.querySelectorAll('[data-show-acc-history]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const acc = store.getById('accounts', el.dataset.showAccHistory);
+      if (!acc) return;
+      const bank = store.getById('banks', acc.bancoId);
+      const title = `Movimientos · ${bank ? bank.nombre + ' — ' : ''}${acc.nombre}`;
+      openTransactionHistory({ title, scope: { type: 'account', id: acc.id } });
+    }));
+    page.querySelectorAll('[data-show-card-history]').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = store.getById('cards', el.dataset.showCardHistory);
+      if (!card) return;
+      openTransactionHistory({ title: `Movimientos · ${card.nombre}`, scope: { type: 'card', id: card.id } });
     }));
   };
 

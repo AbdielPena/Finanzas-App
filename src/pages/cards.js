@@ -7,6 +7,7 @@ import { generateId, formatMoney, percentage } from '../utils.js';
 import { openModal, closeModal, showToast, confirmDialog, emptyState } from '../components.js';
 import { getAssistantWidgetHTML } from '../credit_assistant.js';
 import { enforceLimit } from '../plans_engine.js';
+import { openTransactionHistory } from '../transaction_history.js';
 
 function cardForm(card = null) {
   const banks = store.getAll('banks');
@@ -162,14 +163,14 @@ export default function renderCards() {
           const pct = percentage(used, limit);
           const barColor = pct >= 90 ? 'var(--color-expense)' : pct >= 70 ? 'var(--color-warning)' : 'var(--accent-primary)';
           return `
-            <div class="card" style="position:relative;overflow:hidden">
+            <div class="card card-clickable" data-show-card-history="${card.id}" style="position:relative;overflow:hidden;cursor:pointer" title="Click para ver historial de transacciones">
               <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${bank?.color || 'var(--accent-primary)'}"></div>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
                 <div>
                   <h4 style="margin-bottom:2px">${card.nombre}</h4>
                   <span style="font-size:0.75rem;color:var(--text-muted)">${bank?.nombre || 'Sin banco'} ${card.diaCorte ? `• Corte: ${card.diaCorte}` : ''} ${card.diaPago ? `• Pago: ${card.diaPago}` : ''}</span>
                 </div>
-                <div style="display:flex;gap:4px">
+                <div style="display:flex;gap:4px" data-no-history>
                   <button class="btn-icon" data-pay-card="${card.id}" title="Pagar">${icon('dollarSign', 16)}</button>
                   <button class="btn-icon" data-edit-card="${card.id}" title="Editar">${icon('edit', 16)}</button>
                   <button class="btn-icon" data-del-card="${card.id}" title="Eliminar">${icon('trash', 16)}</button>
@@ -213,6 +214,15 @@ export default function renderCards() {
     page.querySelectorAll('[data-pay-card]').forEach(btn => btn.addEventListener('click', () => {
       const card = store.getById('cards', btn.dataset.payCard);
       if (card) openPayModal(card);
+    }));
+
+    // Click en el cuerpo de la tarjeta → abre historial (excluyendo botones de acción)
+    page.querySelectorAll('[data-show-card-history]').forEach(el => el.addEventListener('click', (e) => {
+      // Si el click ocurrió dentro de la zona de acciones o sobre un botón, ignorar
+      if (e.target.closest('[data-no-history]') || e.target.closest('button')) return;
+      const card = store.getById('cards', el.dataset.showCardHistory);
+      if (!card) return;
+      openTransactionHistory({ title: `Movimientos · ${card.nombre}`, scope: { type: 'card', id: card.id } });
     }));
   };
 

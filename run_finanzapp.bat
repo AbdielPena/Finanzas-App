@@ -1,6 +1,6 @@
 @echo off
 TITLE Ejecutar FinanzApp
-SET PROJECT_DIR=C:\Users\abdiel\.gemini\antigravity\scratch\finanzapp
+SET PROJECT_DIR=C:\Users\abdiel\Desktop\Claude\Programas\finanzapp
 
 echo ==========================================
 echo       INICIANDO FINANZAPP
