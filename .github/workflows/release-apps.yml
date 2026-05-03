@@ -86,6 +86,9 @@ jobs:
       - name: Sync to Android
         run: npx cap sync android
 
+      - name: Apply widget overrides (Java + XML del widget custom)
+        run: bash android-overrides/apply-overrides.sh
+
       - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug

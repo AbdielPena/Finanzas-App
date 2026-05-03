@@ -4,15 +4,9 @@ node_modules/
 # Build output
 dist/
 
-# Mobile build artifacts (Capacitor's android/.gitignore maneja el resto)
-android/build/
-android/app/build/
-android/.gradle/
-android/local.properties
-android/capacitor-cordova-android-plugins/
-ios/build/
-ios/Pods/
-ios/.build/
+# Mobile native projects (regenerados por Capacitor en CI; widget vive en android-overrides/)
+android/
+ios/
 
 # Tauri build artifacts
 src-tauri/target/
