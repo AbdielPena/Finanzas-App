@@ -74,15 +74,23 @@ class Router {
 
       // Mount actual view after micro-delay
       setTimeout(() => {
-        this._container.innerHTML = '';
-        const content = handler();
-        if (typeof content === 'string') {
-          this._container.innerHTML = content;
-        } else if (content instanceof HTMLElement) {
-          this._container.appendChild(content);
+        const update = () => {
+          this._container.innerHTML = '';
+          const content = handler();
+          if (typeof content === 'string') {
+            this._container.innerHTML = content;
+          } else if (content instanceof HTMLElement) {
+            this._container.appendChild(content);
+          }
+          this._container.scrollTop = 0;
+          window.scrollTo(0, 0);
+        };
+        // Usa View Transitions API si esta disponible (Chrome/Edge); fallback transparente
+        if (document.startViewTransition) {
+          document.startViewTransition(update);
+        } else {
+          update();
         }
-        this._container.scrollTop = 0;
-        window.scrollTo(0, 0);
       }, 150);
     } else if (this._container) {
       this._container.innerHTML = `

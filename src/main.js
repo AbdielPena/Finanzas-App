@@ -37,6 +37,18 @@ import {
   getCurrentWorkspace, can
 } from './auth.js';
 
+// ---------- Bootstrap loading screen ----------
+function showBootstrapLoader(text = 'Cargando tus datos...') {
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.innerHTML = `
+    <div class="app-bootstrap">
+      <div class="app-bootstrap-spinner"></div>
+      <div class="app-bootstrap-text">${text}</div>
+    </div>
+  `;
+}
+
 // ---------- Initialize ----------
 async function init() {
   try {
@@ -53,7 +65,8 @@ async function init() {
     setActiveWorkspace(session.workspaceId);
     store.invalidate();
 
-    // Bootstrap: precargar datos del backend (si hay sesion API)
+    // Bootstrap: precargar datos del backend con loader visible
+    showBootstrapLoader('Sincronizando con el servidor...');
     try {
       await store.bootstrap();
     } catch (e) {
@@ -88,7 +101,8 @@ function showLoginScreen() {
         const session = getSession();
         setActiveWorkspace(session.workspaceId);
         store.invalidate();
-        // Bootstrap: precarga datos desde el backend
+        // Bootstrap con loader visible
+        showBootstrapLoader('Cargando tu workspace...');
         try { await store.bootstrap(); } catch (e) { console.warn('[bootstrap] fallo:', e.message); }
         initCategories();
         try { generateAlerts(); } catch (e) { console.warn('Alert generation error:', e); }

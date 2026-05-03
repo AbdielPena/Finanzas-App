@@ -294,3 +294,22 @@ export function applyUserPalette(themeKey) {
 export function aiBadge(item) {
   return item?._aiModified ? '<span class="ai-badge" title="Operación ejecutada por IA" style="font-size:0.85em; margin-left:4px">🤖</span>' : '';
 }
+
+// ---------- Animation helpers (Polish v3) ----------
+/** Pulso visual de exito sobre un elemento. */
+export function flashSuccess(el) {
+  if (!el) return;
+  el.classList.remove('success-pulse');
+  void el.offsetWidth;
+  el.classList.add('success-pulse');
+  setTimeout(() => el.classList.remove('success-pulse'), 800);
+}
+
+/** Navega entre vistas con View Transitions API (fallback transparente). */
+export function withViewTransition(updateFn) {
+  if (document.startViewTransition) {
+    return document.startViewTransition(updateFn);
+  }
+  updateFn();
+  return { finished: Promise.resolve() };
+}

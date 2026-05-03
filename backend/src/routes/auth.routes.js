@@ -6,6 +6,7 @@ import { z } from 'zod';
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
+import rateLimit from 'express-rate-limit';
 import { query, getClient } from '../config/db.js';
 import { config } from '../config/env.js';
 import { HttpError } from '../middleware/errorHandler.js';
@@ -13,6 +14,24 @@ import { authRequired } from '../middleware/auth.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email.service.js';
 
 const router = Router();
+
+// Rate limit estricto para endpoints sensibles (anti brute-force)
+const strictAuthLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,            // 15 minutos
+  max: 10,                              // 10 intentos por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_attempts', message: 'Demasiados intentos, espera 15 minutos.' },
+  skipSuccessfulRequests: true,         // exitos no cuentan
+});
+
+const passwordResetLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,             // 1 hora
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_attempts' },
+});
 
 // ---------- Schemas ----------
 const registerSchema = z.object({
@@ -60,7 +79,7 @@ async function persistRefreshToken(userId, refreshTokenPlain, req) {
 }
 
 // ---------- POST /auth/register ----------
-router.post('/register', async (req, res, next) => {
+router.post('/register', strictAuthLimit, async (req, res, next) => {
   try {
     const data = registerSchema.parse(req.body);
 
@@ -125,7 +144,7 @@ router.post('/register', async (req, res, next) => {
 });
 
 // ---------- POST /auth/login ----------
-router.post('/login', async (req, res, next) => {
+router.post('/login', strictAuthLimit, async (req, res, next) => {
   try {
     const data = loginSchema.parse(req.body);
 
@@ -280,7 +299,7 @@ router.post('/verify-email', async (req, res, next) => {
 });
 
 // ---------- POST /auth/forgot-password ----------
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/forgot-password', passwordResetLimit, async (req, res, next) => {
   try {
     const email = (req.body?.email || '').toLowerCase().trim();
     if (!email) throw new HttpError(400, 'Falta email');
