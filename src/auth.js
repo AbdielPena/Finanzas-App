@@ -14,21 +14,25 @@ const SESSION_KEY = `${PREFIX}session`;
 // Permissions map by role
 // ─────────────────────────────────────────────
 export const ROLES = {
+  owner:      'Owner',
   admin:      'Admin',
   editor:     'Editor',
   supervisor: 'Supervisor',
   viewer:     'Viewer',
 };
 
+const ADMIN_PERMS = [
+  'viewDashboard','viewTransactions','viewAccounts','viewCards',
+  'viewDebts','viewSubscriptions','viewGoals','viewSettings',
+  'viewUsers','viewAI','viewReports',
+  'editTransactions','editAccounts','editCards','editDebts',
+  'editSubscriptions','editGoals','editSettings','manageUsers',
+  'confirmPayments','deleteTransactions',
+];
+
 const ROLE_PERMISSIONS = {
-  admin: [
-    'viewDashboard','viewTransactions','viewAccounts','viewCards',
-    'viewDebts','viewSubscriptions','viewGoals','viewSettings',
-    'viewUsers','viewAI','viewReports',
-    'editTransactions','editAccounts','editCards','editDebts',
-    'editSubscriptions','editGoals','editSettings','manageUsers',
-    'confirmPayments','deleteTransactions',
-  ],
+  owner: ADMIN_PERMS,
+  admin: ADMIN_PERMS, // owner y admin tienen el mismo set
   editor: [
     'viewDashboard','viewTransactions','viewAccounts','viewCards',
     'viewDebts','viewSubscriptions','viewGoals','viewAI','viewReports',
@@ -259,7 +263,7 @@ export async function loginUser(email, password) {
         isSuperAdmin: !!apiUser.isSuperAdmin,
         activo: true,
         estado: 'activo',
-        workspaces: apiWs ? [{ workspaceId: apiWs.id, role: apiWs.rol || 'admin' }] : [],
+        workspaces: apiWs ? [{ workspaceId: apiWs.id, role: (apiWs.rol === 'owner' ? 'admin' : (apiWs.rol || 'admin')) }] : [],
         createdAt: new Date().toISOString(),
       };
       const allUsers = getUsers().filter(u => u.id !== localUser.id);
@@ -271,9 +275,9 @@ export async function loginUser(email, password) {
           id: apiWs.id,
           nombre: apiWs.nombre,
           ownerId: apiUser.id,
-          members: [{ userId: apiUser.id, role: apiWs.rol || 'admin' }],
+          members: [{ userId: apiUser.id, role: (apiWs.rol === 'owner' ? 'admin' : (apiWs.rol || 'admin')) }],
           createdAt: new Date().toISOString(),
-          role: apiWs.rol || 'admin',
+          role: (apiWs.rol === 'owner' ? 'admin' : (apiWs.rol || 'admin')),
         };
         const allWs = getWorkspaces().filter(w => w.id !== apiWs.id);
         saveWorkspaces([...allWs, localWs]);
