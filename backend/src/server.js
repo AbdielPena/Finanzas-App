@@ -14,7 +14,9 @@ import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import workspacesRoutes from './routes/workspaces.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import notificationsRoutes from './routes/notifications.routes.js';
 import { mountEntities } from './routes/entities.routes.js';
+import { startScheduler } from './services/scheduler.service.js';
 
 const app = express();
 
@@ -53,9 +55,13 @@ app.use('/health', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/workspaces', workspacesRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
 
 // CRUD generico para 21 entidades de negocio
 mountEntities(app);
+
+// Inicia cron jobs (alertas + resumen diario)
+startScheduler();
 
 // ---------- 404 + error handler ----------
 app.use(notFound);

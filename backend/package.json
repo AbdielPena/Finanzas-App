@@ -29,7 +29,8 @@
     "pg": "^8.13.1",
     "uuid": "^11.0.5",
     "zod": "^3.24.1",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.9.16",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "node-pg-migrate": "^7.9.1"

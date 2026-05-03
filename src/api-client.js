@@ -231,6 +231,15 @@ export const notifications    = {
   markRead(id) { return request('PATCH', `/notifications/${id}/read`); },
 };
 
+// ---------- Notification preferences & dispatch ----------
+export const notificationPrefs = {
+  get()           { return request('GET', '/notifications/preferences'); },
+  update(data)    { return request('PATCH', '/notifications/preferences', { body: data }); },
+  triggerAlerts() { return request('POST', '/notifications/trigger-alerts'); },
+  sendSummary()   { return request('POST', '/notifications/send-summary'); },
+  log(limit = 50) { return request('GET', '/notifications/log', { query: { limit } }); },
+};
+
 // ---------- Admin ----------
 export const admin = {
   users(search)         { return request('GET', '/admin/users', { query: { search } }); },
@@ -248,5 +257,5 @@ export default {
   beneficiaries, transactions, subscriptions, subscriptionCharges,
   debts, debtPayments, debtTemplates, loans, loanPayments,
   receivables, payables, goals, goalContributions, tithe,
-  notes, notifications, admin, ApiError, tokens, workspace,
+  notes, notifications, notificationPrefs, admin, ApiError, tokens, workspace,
 };

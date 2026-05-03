@@ -69,6 +69,68 @@ export async function sendVerificationEmail(toEmail, token) {
   });
 }
 
+export async function sendNotificationEmail(toEmail, { titulo, mensaje, accion = null }) {
+  const actionHtml = accion ? `
+    <p style="margin:20px 0">
+      <a href="${accion.url}" style="display:inline-block;padding:12px 24px;background:#6c63ff;color:white;text-decoration:none;border-radius:8px;font-weight:600">${accion.label}</a>
+    </p>
+  ` : '';
+  return send({
+    to: toEmail,
+    subject: `[${config.appName}] ${titulo}`,
+    html: baseTemplate(titulo, `<p>${mensaje}</p>${actionHtml}`),
+    text: `${titulo}\n\n${mensaje}${accion ? `\n\n${accion.label}: ${accion.url}` : ''}`,
+  });
+}
+
+export async function sendDailySummaryEmail(toEmail, { nombre, summary }) {
+  const {
+    saldo_total = 0,
+    ingresos_mes = 0,
+    gastos_mes = 0,
+    proximos_pagos = [],
+    alertas = [],
+  } = summary;
+
+  const fmt = (n) => `RD$${Number(n).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const proximosHtml = proximos_pagos.length
+    ? `<h3 style="margin-top:24px">Próximos pagos</h3><ul style="padding-left:20px">${proximos_pagos.map(p => `<li>${p.descripcion} — ${fmt(p.monto)} (${p.fecha})</li>`).join('')}</ul>`
+    : '';
+
+  const alertasHtml = alertas.length
+    ? `<h3 style="margin-top:24px;color:#e85a5a">⚠️ Alertas</h3><ul style="padding-left:20px">${alertas.map(a => `<li>${a}</li>`).join('')}</ul>`
+    : '';
+
+  return send({
+    to: toEmail,
+    subject: `[${config.appName}] Resumen diario — ${new Date().toLocaleDateString('es-DO')}`,
+    html: baseTemplate(`Hola ${nombre} 👋`, `
+      <p>Aquí va el resumen de hoy:</p>
+      <div style="background:#f5f5f5;padding:16px;border-radius:8px;margin:16px 0">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span><strong>Saldo total:</strong></span>
+          <span style="color:#22c55e;font-weight:600">${fmt(saldo_total)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span>Ingresos del mes:</span>
+          <span style="color:#22c55e">${fmt(ingresos_mes)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span>Gastos del mes:</span>
+          <span style="color:#ef4444">${fmt(gastos_mes)}</span>
+        </div>
+      </div>
+      ${proximosHtml}
+      ${alertasHtml}
+      <p style="margin-top:24px">
+        <a href="${config.appUrl}" style="display:inline-block;padding:12px 24px;background:#6c63ff;color:white;text-decoration:none;border-radius:8px">Abrir FinanzApp</a>
+      </p>
+    `),
+    text: `Resumen diario\nSaldo: ${fmt(saldo_total)}\nIngresos: ${fmt(ingresos_mes)}\nGastos: ${fmt(gastos_mes)}`,
+  });
+}
+
 export async function sendPasswordResetEmail(toEmail, token) {
   const url = `${config.appUrl}/#/reset-password?token=${encodeURIComponent(token)}`;
   return send({

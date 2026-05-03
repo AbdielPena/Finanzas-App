@@ -18,6 +18,7 @@ import renderPayables from './pages/payables.js';
 import renderGoals from './pages/goals.js';
 import renderTithe from './pages/tithe.js';
 import renderNotifications, { updateNotifBadge } from './pages/notifications.page.js';
+import renderNotificationPreferences from './pages/notification_preferences.js';
 import renderCategories from './pages/categories.js';
 import renderSettings from './pages/settings.js';
 import renderNotes from './pages/notes.js';
@@ -611,6 +612,7 @@ function showApp() {
   router.register('/goals', renderGoals);
   router.register('/tithe', renderTithe);
   router.register('/notifications', renderNotifications);
+  router.register('/notification-preferences', renderNotificationPreferences);
   router.register('/categories', renderCategories);
   router.register('/settings', can('viewSettings') ? renderSettings : () => { const d = document.createElement('div'); d.className='page-content'; d.innerHTML='<div class="empty-state card"><h3>Acceso restringido</h3><p>No tienes permisos para ver la configuración.</p></div>'; return d; });
   router.register('/notes', renderNotes);

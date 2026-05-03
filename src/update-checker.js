@@ -91,20 +91,9 @@ function showUpdateBanner({ version, downloadUrl, releaseUrl, platform }) {
 
   document.body.appendChild(banner);
 
-  document.getElementById('update-banner-download').addEventListener('click', async () => {
-    const platform = detectPlatform();
-    if (platform === 'tauri') {
-      // En Tauri abrimos el link en el navegador del sistema
-      try {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(downloadUrl);
-      } catch {
-        window.open(downloadUrl, '_blank');
-      }
-    } else {
-      // En Android / web: descarga directa
-      window.open(downloadUrl, '_blank');
-    }
+  document.getElementById('update-banner-download').addEventListener('click', () => {
+    // window.open funciona en Tauri, Capacitor y web (los 3 abren navegador del sistema)
+    window.open(downloadUrl, '_blank');
     banner.remove();
   });
 

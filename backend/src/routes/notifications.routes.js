@@ -1,0 +1,95 @@
+// ============================================================
+// Notifications routes — preferencias y triggers manuales
+// ============================================================
+import { Router } from 'express';
+import { query } from '../config/db.js';
+import { authRequired } from '../middleware/auth.js';
+import { HttpError } from '../middleware/errorHandler.js';
+import {
+  generateAlertsForWorkspace,
+  sendDailySummaryFor,
+} from '../services/notifications.service.js';
+
+const router = Router();
+router.use(authRequired);
+
+const PREF_FIELDS = [
+  'email_enabled', 'push_enabled', 'in_app_enabled',
+  'daily_summary', 'weekly_summary',
+  'alert_payments', 'alert_subscriptions', 'alert_debts', 'alert_card_usage',
+  'card_usage_threshold', 'anticipation_days',
+  'quiet_hours_start', 'quiet_hours_end',
+  'push_token',
+];
+
+// ---------- GET /notification-preferences ----------
+router.get('/preferences', async (req, res, next) => {
+  try {
+    const r = await query('SELECT * FROM notification_preferences WHERE user_id = $1', [req.user.id]);
+    if (r.rowCount > 0) return res.json({ data: r.rows[0] });
+    // Crea defaults
+    const ins = await query(
+      `INSERT INTO notification_preferences (user_id) VALUES ($1) RETURNING *`,
+      [req.user.id]
+    );
+    res.json({ data: ins.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// ---------- PATCH /notification-preferences ----------
+router.patch('/preferences', async (req, res, next) => {
+  try {
+    const updates = [];
+    const params = [];
+    for (const f of PREF_FIELDS) {
+      if (req.body[f] !== undefined) {
+        params.push(req.body[f]);
+        updates.push(`${f} = $${params.length}`);
+      }
+    }
+    if (updates.length === 0) {
+      return res.json({ data: null, unchanged: true });
+    }
+    params.push(req.user.id);
+    const r = await query(
+      `INSERT INTO notification_preferences (user_id) VALUES ($${params.length})
+       ON CONFLICT (user_id) DO UPDATE SET ${updates.join(', ')}
+       RETURNING *`,
+      params
+    );
+    res.json({ data: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// ---------- POST /notification/trigger-alerts (manual scan) ----------
+router.post('/trigger-alerts', async (req, res, next) => {
+  try {
+    const wsId = req.headers['x-workspace-id'];
+    if (!wsId) throw new HttpError(400, 'Falta X-Workspace-Id');
+    await generateAlertsForWorkspace(wsId);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ---------- POST /notification/send-summary (manual) ----------
+router.post('/send-summary', async (req, res, next) => {
+  try {
+    await sendDailySummaryFor(req.user.id);
+    res.json({ ok: true, message: 'Resumen enviado a tu email' });
+  } catch (e) { next(e); }
+});
+
+// ---------- GET /notification/log (historial de envios) ----------
+router.get('/log', async (req, res, next) => {
+  try {
+    const limit = Math.min(200, parseInt(req.query.limit, 10) || 50);
+    const r = await query(
+      `SELECT * FROM notification_log WHERE user_id = $1
+       ORDER BY created_at DESC LIMIT $2`,
+      [req.user.id, limit]
+    );
+    res.json({ data: r.rows });
+  } catch (e) { next(e); }
+});
+
+export default router;
