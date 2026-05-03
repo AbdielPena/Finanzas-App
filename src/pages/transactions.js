@@ -57,8 +57,8 @@ function txForm(tx = null) {
       </div>
       <!-- Clasificación de Ingreso (solo visible cuando tipo=ingreso) -->
       <div class="form-group" id="tx-income-type-group" style="display:${tipo === 'ingreso' ? 'block' : 'none'}">
-        <label class="form-label" style="color:var(--accent-primary)">Tipo de Ingreso</label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="income-type-chips">
+        <label class="form-label" style="position:static;display:block;margin-bottom:8px;font-size:0.78rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent-primary)">Tipo de Ingreso</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="income-type-chips">
           ${[
             { val: 'personal',  label: 'Personal',          emoji: '👤' },
             { val: 'cliente',   label: 'Cliente / Proyecto', emoji: '🏢' },
