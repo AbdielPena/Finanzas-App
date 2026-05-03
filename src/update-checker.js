@@ -6,8 +6,9 @@
 const APP_VERSION = '1.0.1'; // sincronizar con package.json y tauri.conf.json
 const GITHUB_REPO = 'AbdielPena/Finanzas-App';
 const RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 horas
+const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
 const STORAGE_KEY = 'finanzapp_last_update_check';
+const DISMISSED_KEY = 'finanzapp_dismissed_version';
 
 // Detecta si estamos en Tauri (.exe), Capacitor (APK) o web normal
 function detectPlatform() {
@@ -99,36 +100,34 @@ function showUpdateBanner({ version, downloadUrl, releaseUrl, platform }) {
 
   document.getElementById('update-banner-later').addEventListener('click', () => {
     banner.remove();
-    // No volver a mostrar por 24h
-    localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    // No volver a mostrar para esta version especifica
+    localStorage.setItem(DISMISSED_KEY, version);
   });
 }
 
 export async function checkForUpdates({ force = false } = {}) {
   const platform = detectPlatform();
-
-  // Web no necesita update banner (auto-update via reload)
   if (platform === 'web' || platform === 'unknown') return;
 
-  // Throttle: no chequear mas de cada 6 horas
   if (!force) {
     const lastCheck = parseInt(localStorage.getItem(STORAGE_KEY), 10) || 0;
     if (Date.now() - lastCheck < CHECK_INTERVAL_MS) return;
   }
-  localStorage.setItem(STORAGE_KEY, String(Date.now()));
 
   const release = await fetchLatestRelease();
+  // Solo guarda timestamp si la API respondio (asi un fallo no nos bloquea por 1h)
   if (!release) return;
+  localStorage.setItem(STORAGE_KEY, String(Date.now()));
 
   const latestVersion = release.tag_name || release.name;
   if (!latestVersion) return;
 
-  if (compareVersions(latestVersion, APP_VERSION) <= 0) return; // ya estamos al dia
+  if (compareVersions(latestVersion, APP_VERSION) <= 0) return;
+  if (localStorage.getItem(DISMISSED_KEY) === latestVersion) return;
 
   const asset = findAssetForPlatform(release, platform);
   if (!asset) return;
 
-  // Espera 2 segundos para que la UI principal cargue antes de mostrar el banner
   setTimeout(() => {
     showUpdateBanner({
       version: latestVersion,
@@ -136,7 +135,12 @@ export async function checkForUpdates({ force = false } = {}) {
       releaseUrl: release.html_url,
       platform,
     });
-  }, 2000);
+  }, 1000);
+}
+
+// Helper para forzar check desde DevTools: window.__finanzappCheckUpdate()
+if (typeof window !== 'undefined') {
+  window.__finanzappCheckUpdate = () => checkForUpdates({ force: true });
 }
 
 export default { checkForUpdates, detectPlatform };
