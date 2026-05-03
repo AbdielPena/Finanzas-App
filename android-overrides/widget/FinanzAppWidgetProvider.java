@@ -54,13 +54,13 @@ public class FinanzAppWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.widget_balance, balance);
         views.setTextViewText(R.id.widget_last_sync, lastSync);
 
-        // Botones - cada uno abre la app con un deep link distinto
+        // Botones de transaccion: abren dialog rapido NATIVO (NO la app completa)
         views.setOnClickPendingIntent(R.id.btn_ingreso,
-            buildDeepLinkIntent(context, "ingreso", appWidgetId * 10 + 1));
+            buildQuickIntent(context, "ingreso", appWidgetId * 10 + 1));
         views.setOnClickPendingIntent(R.id.btn_gasto,
-            buildDeepLinkIntent(context, "gasto", appWidgetId * 10 + 2));
+            buildQuickIntent(context, "gasto", appWidgetId * 10 + 2));
         views.setOnClickPendingIntent(R.id.btn_transferencia,
-            buildDeepLinkIntent(context, "transferencia", appWidgetId * 10 + 3));
+            buildQuickIntent(context, "transferencia", appWidgetId * 10 + 3));
         views.setOnClickPendingIntent(R.id.btn_open,
             buildDeepLinkIntent(context, "dashboard", appWidgetId * 10 + 4));
 
@@ -80,6 +80,24 @@ public class FinanzAppWidgetProvider extends AppWidgetProvider {
         intent.setAction(Intent.ACTION_VIEW);
         intent.setData(Uri.parse("finanzapp://action?type=" + type));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return PendingIntent.getActivity(context, requestCode, intent, flags);
+    }
+
+    /**
+     * Abre la QuickTransactionActivity (dialog flotante NATIVO) que guarda
+     * la transaccion en estado HOLD via API, sin abrir la app principal.
+     * El usuario asigna la cuenta despues desde el Pending Center.
+     */
+    private static PendingIntent buildQuickIntent(Context context, String type, int requestCode) {
+        Intent intent = new Intent(context, QuickTransactionActivity.class);
+        intent.setAction(Intent.ACTION_VIEW);
+        intent.setData(Uri.parse("finanzapp-quick://action?type=" + type));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (android.os.Build.VERSION.SDK_INT >= 23) {

@@ -15,9 +15,10 @@ cp "$OVERRIDES/AndroidManifest.xml" "$ANDROID/app/src/main/AndroidManifest.xml"
 # 2. Strings con descripcion del widget
 cp "$OVERRIDES/strings.xml" "$ANDROID/app/src/main/res/values/strings.xml"
 
-# 3. Codigo Java del widget provider
+# 3. Codigo Java del widget provider + Quick Transaction Activity
 mkdir -p "$ANDROID/app/src/main/java/com/finanzapp/app/widget"
 cp "$OVERRIDES/widget/FinanzAppWidgetProvider.java" "$ANDROID/app/src/main/java/com/finanzapp/app/widget/"
+cp "$OVERRIDES/widget/QuickTransactionActivity.java" "$ANDROID/app/src/main/java/com/finanzapp/app/widget/"
 
 # 4. Layout del widget
 cp "$OVERRIDES/widget/widget_finanzapp.xml" "$ANDROID/app/src/main/res/layout/"

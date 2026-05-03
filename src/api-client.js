@@ -15,23 +15,41 @@ const ACCESS_KEY  = 'finanzapp_access_token';
 const REFRESH_KEY = 'finanzapp_refresh_token';
 const WS_KEY      = 'finanzapp_active_ws';
 
+// Mirror al storage nativo de Android (SharedPreferences) para que el Widget
+// pueda leer el JWT y workspace_id desde codigo Java.
+async function mirrorToNative(key, value) {
+  try {
+    if (typeof window !== 'undefined' && window.Capacitor?.Plugins?.Preferences) {
+      if (value === null || value === undefined) {
+        await window.Capacitor.Plugins.Preferences.remove({ key });
+      } else {
+        await window.Capacitor.Plugins.Preferences.set({ key, value });
+      }
+    }
+  } catch { /* silent */ }
+}
+
 export const tokens = {
   getAccess()  { return localStorage.getItem(ACCESS_KEY); },
   getRefresh() { return localStorage.getItem(REFRESH_KEY); },
   set(access, refresh) {
     localStorage.setItem(ACCESS_KEY, access);
     if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+    mirrorToNative('jwt_access', access);
+    if (refresh) mirrorToNative('jwt_refresh', refresh);
   },
   clear() {
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
+    mirrorToNative('jwt_access', null);
+    mirrorToNative('jwt_refresh', null);
   },
 };
 
 export const workspace = {
   getId() { return localStorage.getItem(WS_KEY); },
-  set(id) { localStorage.setItem(WS_KEY, id); },
-  clear() { localStorage.removeItem(WS_KEY); },
+  set(id)  { localStorage.setItem(WS_KEY, id); mirrorToNative('workspace_id', id); },
+  clear()  { localStorage.removeItem(WS_KEY); mirrorToNative('workspace_id', null); },
 };
 
 // ---------- Field name transformation: snake_case <-> camelCase ----------

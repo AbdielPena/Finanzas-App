@@ -1,6 +1,6 @@
 {
   "name": "finanzapp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Aplicaci\u00f3n de finanzas personales \u2014 multiplataforma (web + desktop + mobile)",
   "type": "module",
   "scripts": {
@@ -24,6 +24,7 @@
   "dependencies": {
     "@capacitor/android": "^6.2.0",
     "@capacitor/core": "^6.2.0",
-    "@capacitor/ios": "^6.2.0"
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/preferences": "^8.0.1"
   }
 }

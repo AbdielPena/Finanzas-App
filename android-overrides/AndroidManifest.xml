@@ -45,6 +45,20 @@
                 android:resource="@xml/widget_finanzapp_info" />
         </receiver>
 
+        <!-- Activity dialog para registrar transacciones rapidas desde el widget -->
+        <activity
+            android:name=".widget.QuickTransactionActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="finanzapp-quick" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
