@@ -3,7 +3,7 @@
 // publicada en GitHub Releases y muestra banner al usuario
 // ============================================================
 
-const APP_VERSION = '1.0.2'; // sincronizar con package.json y tauri.conf.json
+const APP_VERSION = '1.0.3'; // sincronizar con package.json y tauri.conf.json
 const GITHUB_REPO = 'AbdielPena/Finanzas-App';
 const RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
