@@ -33,6 +33,37 @@ export const workspace = {
   clear() { localStorage.removeItem(WS_KEY); },
 };
 
+// ---------- Field name transformation: snake_case <-> camelCase ----------
+// Backend usa snake_case (banco_id), frontend usa camelCase (bancoId)
+function snakeToCamel(s) {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+function camelToSnake(s) {
+  return s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
+}
+function deepCamelize(obj) {
+  if (Array.isArray(obj)) return obj.map(deepCamelize);
+  if (obj && typeof obj === 'object' && obj.constructor === Object) {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[snakeToCamel(k)] = deepCamelize(v);
+    }
+    return out;
+  }
+  return obj;
+}
+function deepSnakeize(obj) {
+  if (Array.isArray(obj)) return obj.map(deepSnakeize);
+  if (obj && typeof obj === 'object' && obj.constructor === Object) {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      out[camelToSnake(k)] = deepSnakeize(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
 // ---------- Refresh queue (evita multiples refrescos en paralelo) ----------
 let refreshing = null;
 
@@ -95,7 +126,7 @@ async function request(method, path, opts = {}) {
   const res = await fetch(url, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? JSON.stringify(deepSnakeize(body)) : undefined,
   });
 
   // Token expirado, intenta refresh y reintenta una vez
@@ -114,7 +145,8 @@ async function request(method, path, opts = {}) {
   if (!res.ok) {
     throw new ApiError(res.status, data?.error || 'request_failed', data?.details);
   }
-  return data;
+  // Transform snake_case responses to camelCase
+  return deepCamelize(data);
 }
 
 // ---------- Auth ----------

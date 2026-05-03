@@ -38,7 +38,7 @@ import {
 } from './auth.js';
 
 // ---------- Initialize ----------
-function init() {
+async function init() {
   try {
     const theme = store.getSetting('theme', 'dark');
     document.documentElement.setAttribute('data-theme', theme);
@@ -51,12 +51,19 @@ function init() {
     // Set active workspace so store uses the right prefix
     const session = getSession();
     setActiveWorkspace(session.workspaceId);
-    store.invalidate(); // clear cache so it reads from workspace namespace
+    store.invalidate();
+
+    // Bootstrap: precargar datos del backend (si hay sesion API)
+    try {
+      await store.bootstrap();
+    } catch (e) {
+      console.warn('[bootstrap] fallo - usando localStorage:', e.message);
+    }
 
     initCategories();
     try { generateAlerts(); } catch (e) { console.warn('Alert generation error:', e); }
-    
-    // Procesar préstamos automáticos al iniciar
+
+    // Procesar prestamos automaticos al iniciar
     try {
       import('./loans_engine.js').then(engine => {
         engine.processAutoPayments();
@@ -66,7 +73,7 @@ function init() {
     showApp();
   } catch (e) {
     console.error('Init error:', e);
-    document.getElementById('app').innerHTML = `<div style="padding:40px;color:#ff5252;font-family:monospace"><h2>Error de Inicialización</h2><pre>${e.message}\n${e.stack}</pre></div>`;
+    document.getElementById('app').innerHTML = `<div style="padding:40px;color:#ff5252;font-family:monospace"><h2>Error de Inicializacion</h2><pre>${e.message}\n${e.stack}</pre></div>`;
   }
 }
 
@@ -76,11 +83,13 @@ function showLoginScreen() {
   try {
     const app = document.getElementById('app');
     app.innerHTML = '';
-    app.appendChild(renderLogin((migrated) => {
+    app.appendChild(renderLogin(async (migrated) => {
       try {
         const session = getSession();
         setActiveWorkspace(session.workspaceId);
         store.invalidate();
+        // Bootstrap: precarga datos desde el backend
+        try { await store.bootstrap(); } catch (e) { console.warn('[bootstrap] fallo:', e.message); }
         initCategories();
         try { generateAlerts(); } catch (e) { console.warn('Alert generation error:', e); }
         showApp();

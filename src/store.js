@@ -1,116 +1,231 @@
 // ============================================
-// Store — Centralized data persistence layer
+// Store — Capa de datos hibrida
+// - Mantiene API SINCRONO (cero cambios en las 23 paginas)
+// - Backend = API REST (cuando esta autenticado)
+// - Cache en memoria precargada via bootstrap()
+// - Mutaciones optimistas: actualizan cache YA, sincronizan en background
+// - Fallback a localStorage si la API no esta disponible
 // ============================================
 
-const STORE_PREFIX = 'finanzapp_';
+import api, { tokens, workspace as wsCtx } from './api-client.js';
 
-// Dynamic prefix based on active workspace (set by auth system)
+// ---------- Constantes ----------
+const STORE_PREFIX = 'finanzapp_';
 let _activeWorkspaceId = null;
 
 export function setActiveWorkspace(wsId) {
   _activeWorkspaceId = wsId;
+  if (wsId) wsCtx.set(wsId);
+  else wsCtx.clear();
 }
 
 function getPrefix() {
-  return _activeWorkspaceId ? `${STORE_PREFIX}${_activeWorkspaceId}_` : `${STORE_PREFIX}legacy_`;
+  const wsId = _activeWorkspaceId || wsCtx.getId();
+  return wsId ? `${STORE_PREFIX}${wsId}_` : `${STORE_PREFIX}legacy_`;
 }
 
+// ---------- Mapeo coleccion -> resource del API ----------
+const RESOURCES = {
+  banks: 'banks',
+  accounts: 'accounts',
+  cards: 'cards',
+  external_cards: 'externalCards',
+  categories: 'categories',
+  beneficiaries: 'beneficiaries',
+  transactions: 'transactions',
+  subscriptions: 'subscriptions',
+  subscription_charges: 'subscriptionCharges',
+  debts: 'debts',
+  debt_payments: 'debtPayments',
+  debt_templates: 'debtTemplates',
+  loans: 'loans',
+  loan_payments: 'loanPayments',
+  receivables: 'receivables',
+  payables: 'payables',
+  goals: 'goals',
+  goal_contributions: 'goalContributions',
+  tithe: 'tithe',
+  notes: 'notes',
+  notifications: 'notifications',
+};
+
+// ---------- Modo de operacion ----------
+function isOnline() {
+  return !!tokens.getAccess();
+}
+
+// ---------- Store ----------
 class Store {
   constructor() {
     this._listeners = {};
     this._cache = {};
+    this._writeQueue = [];
+    this._writing = false;
+    this._bootstrapped = false;
   }
 
-  // ---------- Core CRUD ----------
-  _getKey(collection) {
-    return `${getPrefix()}${collection}`;
+  // ============================================
+  //  Bootstrap — precarga todas las colecciones
+  //  Se llama una vez despues de login
+  // ============================================
+  async bootstrap() {
+    if (!isOnline()) {
+      // Modo offline / sin login: usa localStorage como antes
+      this._bootstrapped = true;
+      return;
+    }
+
+    const collections = Object.keys(RESOURCES);
+    const results = await Promise.allSettled(
+      collections.map(col => api[RESOURCES[col]].list({ limit: 200 }))
+    );
+
+    collections.forEach((col, i) => {
+      const r = results[i];
+      if (r.status === 'fulfilled') {
+        this._cache[col] = r.value.data || [];
+      } else {
+        console.warn(`[store] Falla cargando ${col}:`, r.reason?.message);
+        this._cache[col] = [];
+      }
+    });
+
+    this._bootstrapped = true;
+    this._notify('*');
   }
 
+  // ============================================
+  //  Read — siempre sincrono, sirve desde cache
+  // ============================================
   getAll(collection) {
     if (this._cache[collection]) return this._cache[collection];
+    // Fallback localStorage (modo legado o no bootstrap aun)
     try {
-      const data = localStorage.getItem(this._getKey(collection));
+      const data = localStorage.getItem(`${getPrefix()}${collection}`);
       const parsed = data ? JSON.parse(data) : [];
-      // Filtro defensivo: asegurar que todos los elementos sean objetos válidos
-      const valid = Array.isArray(parsed) ? parsed.filter(item => item !== null && typeof item === 'object') : [];
+      const valid = Array.isArray(parsed) ? parsed.filter(it => it !== null && typeof it === 'object') : [];
       this._cache[collection] = valid;
       return valid;
-    } catch {
-      return [];
-    }
+    } catch { return []; }
   }
 
   getById(collection, id) {
     return this.getAll(collection).find(item => item.id === id) || null;
   }
 
-  save(collection, items) {
-    this._cache[collection] = items;
-    localStorage.setItem(this._getKey(collection), JSON.stringify(items));
-    this._notify(collection);
+  filter(collection, predicate)     { return this.getAll(collection).filter(predicate); }
+  find(collection, predicate)       { return this.getAll(collection).find(predicate) || null; }
+  count(collection, predicate)      { return predicate ? this.filter(collection, predicate).length : this.getAll(collection).length; }
+  sum(collection, field, predicate) {
+    const items = predicate ? this.filter(collection, predicate) : this.getAll(collection);
+    return items.reduce((acc, it) => acc + (parseFloat(it[field]) || 0), 0);
   }
 
+  // ============================================
+  //  Write — optimista: cache YA, API en background
+  // ============================================
   add(collection, item) {
-    const items = this.getAll(collection);
-    items.push({ ...item, createdAt: new Date().toISOString() });
-    this.save(collection, items);
-    return item;
+    const enriched = { ...item, createdAt: new Date().toISOString() };
+    const items = [...(this._cache[collection] || []), enriched];
+    this._cache[collection] = items;
+    this._persistLocal(collection, items);
+    this._notify(collection);
+
+    if (isOnline() && RESOURCES[collection]) {
+      this._enqueueWrite('create', collection, enriched);
+    }
+    return enriched;
   }
 
   update(collection, id, updates) {
     const items = this.getAll(collection);
-    const idx = items.findIndex(item => item.id === id);
+    const idx = items.findIndex(it => it.id === id);
     if (idx === -1) return null;
-    items[idx] = { ...items[idx], ...updates, updatedAt: new Date().toISOString() };
-    this.save(collection, items);
-    return items[idx];
+    const updated = { ...items[idx], ...updates, updatedAt: new Date().toISOString() };
+    items[idx] = updated;
+    this._cache[collection] = [...items];
+    this._persistLocal(collection, items);
+    this._notify(collection);
+
+    if (isOnline() && RESOURCES[collection]) {
+      this._enqueueWrite('update', collection, { id, ...updates });
+    }
+    return updated;
   }
 
   remove(collection, id) {
-    const items = this.getAll(collection).filter(item => item.id !== id);
-    this.save(collection, items);
+    const items = this.getAll(collection).filter(it => it.id !== id);
+    this._cache[collection] = items;
+    this._persistLocal(collection, items);
+    this._notify(collection);
+
+    if (isOnline() && RESOURCES[collection]) {
+      this._enqueueWrite('remove', collection, { id });
+    }
   }
 
-  // ---------- Query helpers ----------
-  filter(collection, predicate) {
-    return this.getAll(collection).filter(predicate);
+  save(collection, items) {
+    this._cache[collection] = items;
+    this._persistLocal(collection, items);
+    this._notify(collection);
   }
 
-  find(collection, predicate) {
-    return this.getAll(collection).find(predicate) || null;
+  // ============================================
+  //  Write queue (background API sync)
+  // ============================================
+  _enqueueWrite(op, collection, data) {
+    this._writeQueue.push({ op, collection, data });
+    this._processQueue();
   }
 
-  count(collection, predicate) {
-    if (predicate) return this.filter(collection, predicate).length;
-    return this.getAll(collection).length;
+  async _processQueue() {
+    if (this._writing) return;
+    this._writing = true;
+    try {
+      while (this._writeQueue.length > 0) {
+        const { op, collection, data } = this._writeQueue.shift();
+        const resource = api[RESOURCES[collection]];
+        if (!resource) continue;
+        try {
+          if (op === 'create') await resource.create(data);
+          else if (op === 'update') await resource.update(data.id, data);
+          else if (op === 'remove') await resource.remove(data.id);
+        } catch (err) {
+          console.warn(`[store] write fallido ${op} ${collection}:`, err.message);
+          // En produccion: reintento con backoff o snackbar al user
+        }
+      }
+    } finally {
+      this._writing = false;
+    }
   }
 
-  sum(collection, field, predicate) {
-    const items = predicate ? this.filter(collection, predicate) : this.getAll(collection);
-    return items.reduce((acc, item) => acc + (parseFloat(item[field]) || 0), 0);
+  _persistLocal(collection, items) {
+    // Mantiene una copia local como respaldo (offline-first)
+    try {
+      localStorage.setItem(`${getPrefix()}${collection}`, JSON.stringify(items));
+    } catch { /* quota exceeded */ }
   }
 
-  // ---------- Settings (key-value) ----------
+  // ============================================
+  //  Settings — siempre localStorage por simplicidad
+  //  (TODO: mover a /workspaces/:id/settings en futuro)
+  // ============================================
   getSetting(key, defaultVal = null) {
     try {
-      const wsKey = this._getKey('settings');
+      const wsKey = `${getPrefix()}settings`;
       const settings = JSON.parse(localStorage.getItem(wsKey) || '{}');
-      
-      // Fallback a configuración global solo si el workspace está vacío (primer uso tras migración)
       if (Object.keys(settings).length === 0) {
         const globalSettings = JSON.parse(localStorage.getItem(`${STORE_PREFIX}settings`) || '{}');
         if (globalSettings[key] !== undefined) return globalSettings[key];
       }
-
       return settings[key] !== undefined ? settings[key] : defaultVal;
-    } catch {
-      return defaultVal;
-    }
+    } catch { return defaultVal; }
   }
 
   setSetting(key, value) {
     try {
-      const wsKey = this._getKey('settings');
+      const wsKey = `${getPrefix()}settings`;
       const settings = JSON.parse(localStorage.getItem(wsKey) || '{}');
       settings[key] = value;
       localStorage.setItem(wsKey, JSON.stringify(settings));
@@ -120,67 +235,50 @@ class Store {
 
   getSettings() {
     try {
-      const wsKey = this._getKey('settings');
+      const wsKey = `${getPrefix()}settings`;
       let settings = JSON.parse(localStorage.getItem(wsKey) || 'null');
-      
-      // Fallback legacy global
       if (!settings || Object.keys(settings).length === 0) {
         settings = JSON.parse(localStorage.getItem(`${STORE_PREFIX}settings`) || '{}');
       }
-
-      // Aseguramos estructura de Notificaciones Avanzadas
       if (!settings.notifications) {
         settings.notifications = {
           global: true,
           anticipationDays: 3,
-          types: {
-            cc_payments: true,
-            subs: true,
-            debts: true,
-            receivables: true,
-            smart: true
-          }
+          types: { cc_payments: true, subs: true, debts: true, receivables: true, smart: true }
         };
       }
       return settings;
     } catch {
-      return {
-        notifications: { global: true, anticipationDays: 3, types: {} }
-      };
+      return { notifications: { global: true, anticipationDays: 3, types: {} } };
     }
   }
 
   saveSettings(settings) {
-    localStorage.setItem(this._getKey('settings'), JSON.stringify(settings));
+    localStorage.setItem(`${getPrefix()}settings`, JSON.stringify(settings));
     this._notify('settings');
   }
 
-  // ---------- Auth (delegated to auth.js) ----------
+  // ============================================
+  //  Auth (legacy compat)
+  // ============================================
   getAuth() {
     try { return JSON.parse(localStorage.getItem(`${STORE_PREFIX}auth`) || '{}'); } catch { return {}; }
   }
-  saveAuth(data) {
-    localStorage.setItem(`${STORE_PREFIX}auth`, JSON.stringify(data));
-  }
+  saveAuth(data) { localStorage.setItem(`${STORE_PREFIX}auth`, JSON.stringify(data)); }
   isFirstUse() {
-    // Legacy: check old single-user auth
     try {
       const users = JSON.parse(localStorage.getItem('finanzapp_users') || '[]');
-      return users.length === 0;
+      return users.length === 0 && !tokens.getAccess();
     } catch { return true; }
   }
-  isLoggedIn() {
-    try {
-      const session = JSON.parse(sessionStorage.getItem('finanzapp_session') || 'null');
-      return !!(session?.userId && session?.workspaceId);
-    } catch { return false; }
-  }
+  isLoggedIn() { return !!tokens.getAccess(); }
   setSession(active) {
-    // Legacy compat — use auth.js setSession instead
-    if (!active) sessionStorage.removeItem('finanzapp_session');
+    if (!active) { tokens.clear(); wsCtx.clear(); }
   }
 
-  // ---------- Pub/Sub ----------
+  // ============================================
+  //  Pub/Sub
+  // ============================================
   on(collection, callback) {
     if (!this._listeners[collection]) this._listeners[collection] = [];
     this._listeners[collection].push(callback);
@@ -188,60 +286,65 @@ class Store {
       this._listeners[collection] = this._listeners[collection].filter(cb => cb !== callback);
     };
   }
-
   _notify(collection) {
     (this._listeners[collection] || []).forEach(cb => cb());
     (this._listeners['*'] || []).forEach(cb => cb(collection));
   }
 
-  // ---------- Export / Import ----------
+  // ============================================
+  //  Export / Import (backup)
+  // ============================================
   exportData() {
     const data = {};
-    const collections = [
-      'banks', 'accounts', 'cards', 'transactions', 'categories',
-      'subscriptions', 'subscription_charges', 'debts', 'debt_payments', 'debt_templates',
-      'loans', 'loan_payments',
-      'receivables', 'payables', 'goals', 'goal_contributions',
-      'notifications', 'tithe', 'settings'
-    ];
-    collections.forEach(col => {
-      const key = this._getKey(col);
-      const val = localStorage.getItem(key);
-      if (val) data[col] = JSON.parse(val);
+    Object.keys(RESOURCES).forEach(col => {
+      const items = this.getAll(col);
+      if (items.length > 0) data[col] = items;
     });
+    data.settings = this.getSettings();
     data._exportDate = new Date().toISOString();
-    data._version = '1.0.0';
+    data._version = '2.0.0';
     return data;
   }
 
-  importData(data) {
-    if (!data || typeof data !== 'object') throw new Error('Datos inválidos');
-    Object.keys(data).forEach(key => {
-      if (key.startsWith('_')) return;
-      localStorage.setItem(this._getKey(key), JSON.stringify(data[key]));
-    });
-    this._cache = {};
+  async importData(data) {
+    if (!data || typeof data !== 'object') throw new Error('Datos invalidos');
+    for (const key of Object.keys(data)) {
+      if (key.startsWith('_')) continue;
+      if (key === 'settings') { this.saveSettings(data[key]); continue; }
+      if (!Array.isArray(data[key])) continue;
+      this._cache[key] = data[key];
+      this._persistLocal(key, data[key]);
+      // Re-crea en API
+      if (isOnline() && RESOURCES[key]) {
+        for (const item of data[key]) this._enqueueWrite('create', key, item);
+      }
+    }
     this._notify('*');
   }
 
-  // Clear all data
   clearAll() {
     const keys = Object.keys(localStorage).filter(k => k.startsWith(STORE_PREFIX));
     keys.forEach(k => localStorage.removeItem(k));
     this._cache = {};
-    sessionStorage.removeItem(`${STORE_PREFIX}session`);
+    tokens.clear();
+    wsCtx.clear();
   }
 
-  // Invalidate cache
   invalidate(collection) {
     if (collection) {
       delete this._cache[collection];
+      // Re-fetch en background
+      if (isOnline() && RESOURCES[collection]) {
+        api[RESOURCES[collection]].list({ limit: 200 }).then(r => {
+          this._cache[collection] = r.data || [];
+          this._notify(collection);
+        }).catch(() => {});
+      }
     } else {
       this._cache = {};
     }
   }
 }
 
-// Singleton
 export const store = new Store();
 export default store;

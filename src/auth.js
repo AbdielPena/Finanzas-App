@@ -1,6 +1,9 @@
 // ============================================
 // Auth — Multi-user + Workspace system
+// MODO HIBRIDO: usa API (backend) + cachea en localStorage
+// para mantener compatibilidad con los getters sincronos.
 // ============================================
+import api, { tokens, workspace as wsCtx } from './api-client.js';
 
 const PREFIX = 'finanzapp_';
 const USERS_KEY  = `${PREFIX}users`;
@@ -117,6 +120,8 @@ export function isLoggedIn() {
 }
 
 export function logout() {
+  // Llama API logout en background (no bloqueamos UI)
+  api.auth.logout().catch(() => {});
   setSession(null);
 }
 
@@ -140,51 +145,78 @@ export function requirePerm(permission, label = '') {
 // Registration — Create user + workspace
 // ─────────────────────────────────────────────
 export async function registerUser({ nombre, email, password, workspaceName }) {
-  const users = getUsers();
+  // ── Modo API (preferido) ──
+  if (canUseApi()) {
+    try {
+      const res = await api.auth.register({
+        nombre: nombre.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        workspaceName: workspaceName?.trim() || `${nombre.trim()}'s Finanzas`,
+      });
+      const apiUser = res.user;
+      const apiWs = res.workspace;
 
-  // Prevent duplicate email
+      // Cachea en localStorage
+      const localUser = {
+        id: apiUser.id,
+        nombre: apiUser.nombre,
+        email: apiUser.email,
+        avatar: apiUser.nombre.trim().charAt(0).toUpperCase(),
+        workspaces: [{ workspaceId: apiWs.id, role: 'admin' }],
+        activo: true,
+        estado: 'activo',
+        isSuperAdmin: false,
+        createdAt: new Date().toISOString(),
+      };
+      const allUsers = getUsers().filter(u => u.id !== localUser.id);
+      saveUsers([...allUsers, localUser]);
+
+      const localWs = {
+        id: apiWs.id,
+        nombre: apiWs.nombre,
+        ownerUserId: apiUser.id,
+        members: [{ userId: apiUser.id, role: 'admin' }],
+        createdAt: new Date().toISOString(),
+      };
+      const allWs = getWorkspaces().filter(w => w.id !== apiWs.id);
+      saveWorkspaces([...allWs, localWs]);
+
+      return { user: localUser, workspace: localWs, migrated: 0 };
+    } catch (err) {
+      if (err?.status === 409) throw new Error('Ya existe una cuenta con ese correo.');
+      console.warn('[auth] API register fallo, usando local:', err.message);
+    }
+  }
+
+  // ── Modo legado (localStorage) ──
+  const users = getUsers();
   if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
     throw new Error('Ya existe una cuenta con ese correo.');
   }
-
   const userId = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const wsId   = `ws_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const salt   = await generateSalt();
   const hash   = await hashPassword(password, salt);
 
   const user = {
-    id: userId,
-    nombre: nombre.trim(),
-    email: email.trim().toLowerCase(),
-    passwordHash: hash,
-    salt,
-    avatar: nombre.trim().charAt(0).toUpperCase(),
+    id: userId, nombre: nombre.trim(), email: email.trim().toLowerCase(),
+    passwordHash: hash, salt, avatar: nombre.trim().charAt(0).toUpperCase(),
     workspaces: [{ workspaceId: wsId, role: 'admin' }],
-    activo: true,
-    createdAt: new Date().toISOString(),
+    activo: true, createdAt: new Date().toISOString(),
   };
-
   const workspace = {
-    id: wsId,
-    nombre: workspaceName?.trim() || `${nombre.trim()}'s Finanzas`,
-    ownerUserId: userId,
-    members: [{ userId, role: 'admin' }],
+    id: wsId, nombre: workspaceName?.trim() || `${nombre.trim()}'s Finanzas`,
+    ownerUserId: userId, members: [{ userId, role: 'admin' }],
     createdAt: new Date().toISOString(),
   };
-
-  users.push(user);
-  saveUsers(users);
-
+  users.push(user); saveUsers(users);
   const workspaces = getWorkspaces();
-  workspaces.push(workspace);
-  saveWorkspaces(workspaces);
+  workspaces.push(workspace); saveWorkspaces(workspaces);
 
-  // Auto-migrate legacy data on FIRST registration
   const isFirstUser = users.length === 1;
   let migrated = 0;
-  if (isFirstUser && hasLegacyData()) {
-    migrated = migrateLegacyData(wsId);
-  }
+  if (isFirstUser && hasLegacyData()) migrated = migrateLegacyData(wsId);
 
   return { user, workspace, migrated };
 }
@@ -193,20 +225,64 @@ export async function registerUser({ nombre, email, password, workspaceName }) {
 // Login
 // ─────────────────────────────────────────────
 export async function loginUser(email, password) {
+  // ── Modo API (preferido) ──
+  if (canUseApi()) {
+    try {
+      const res = await api.auth.login(email.trim(), password);
+      const apiUser = res.user;
+      const apiWs = res.workspace;
+
+      // Cachea user en localStorage para que getters sincronos funcionen
+      const localUser = {
+        id: apiUser.id,
+        email: apiUser.email,
+        nombre: apiUser.nombre,
+        isSuperAdmin: !!apiUser.isSuperAdmin,
+        activo: true,
+        estado: 'activo',
+        workspaces: apiWs ? [{ workspaceId: apiWs.id, role: apiWs.rol || 'admin' }] : [],
+        createdAt: new Date().toISOString(),
+      };
+      const allUsers = getUsers().filter(u => u.id !== localUser.id);
+      saveUsers([...allUsers, localUser]);
+
+      const workspaces = [];
+      if (apiWs) {
+        const localWs = {
+          id: apiWs.id,
+          nombre: apiWs.nombre,
+          ownerId: apiUser.id,
+          members: [{ userId: apiUser.id, role: apiWs.rol || 'admin' }],
+          createdAt: new Date().toISOString(),
+          role: apiWs.rol || 'admin',
+        };
+        const allWs = getWorkspaces().filter(w => w.id !== apiWs.id);
+        saveWorkspaces([...allWs, localWs]);
+        workspaces.push(localWs);
+      }
+
+      return { user: localUser, workspaces };
+    } catch (err) {
+      // Si la API rechaza con 401, propaga error claro
+      if (err?.status === 401) throw new Error('Credenciales invalidas.');
+      if (err?.status === 403) throw new Error('Cuenta suspendida o inactiva.');
+      // Otro error: cae a modo local solo si NO esta autenticado en absoluto
+      console.warn('[auth] API login fallo, intentando local:', err.message);
+    }
+  }
+
+  // ── Modo legado (localStorage solamente) ──
   const users = getUsers();
   const user  = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
-
   if (!user) throw new Error('No existe una cuenta con ese correo.');
-  if (!user.activo) throw new Error('Esta cuenta está desactivada.');
+  if (!user.activo) throw new Error('Esta cuenta esta desactivada.');
 
   const hash = await hashPassword(password, user.salt);
-  if (hash !== user.passwordHash) throw new Error('Contraseña incorrecta.');
+  if (hash !== user.passwordHash) throw new Error('Contrasena incorrecta.');
 
-  // Get workspaces for this user
   const allWs = getWorkspaces();
   const userWs = user.workspaces || [];
-
-  if (userWs.length === 0) throw new Error('No tienes acceso a ningún workspace.');
+  if (userWs.length === 0) throw new Error('No tienes acceso a ningun workspace.');
 
   const workspaces = userWs.map(uw => {
     const ws = allWs.find(w => w.id === uw.workspaceId);
@@ -215,12 +291,16 @@ export async function loginUser(email, password) {
 
   if (workspaces.length === 0) throw new Error('No se encontraron tus workspaces.');
 
-  // Auto-migrate if it failed during registration
   if (hasLegacyData()) {
     migrateLegacyData(workspaces[0].id);
   }
-
   return { user, workspaces };
+}
+
+// Helper: detecta si la API esta disponible (configurada)
+function canUseApi() {
+  // Si fetch existe y la URL base no es vacia
+  return typeof fetch === 'function';
 }
 
 // ─────────────────────────────────────────────
@@ -233,6 +313,9 @@ export function selectWorkspace(userId, workspaceId) {
 
   const ws = user.workspaces?.find(w => w.workspaceId === workspaceId);
   if (!ws) throw new Error('Sin acceso a este workspace.');
+
+  // Sincroniza el workspace activo en api-client (header X-Workspace-Id)
+  wsCtx.set(workspaceId);
 
   setSession({ userId, workspaceId, role: ws.role, nombre: user.nombre, avatar: user.avatar });
 }
