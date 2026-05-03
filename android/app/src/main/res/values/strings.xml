@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FinanzApp</string>
+    <string name="title_activity_main">FinanzApp</string>
+    <string name="package_name">com.finanzapp.app</string>
+    <string name="custom_url_scheme">com.finanzapp.app</string>
+    <string name="widget_description">Acceso rapido a registrar ingresos, gastos y transferencias</string>
+    <string name="widget_label">FinanzApp Quick</string>
+</resources>
