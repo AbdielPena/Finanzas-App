@@ -22,7 +22,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /finanzapp-api/
+          protocol: ftps
+          port: 21
+          server-dir: finanzapp-api/
           local-dir: ./backend/
           dangerous-clean-slate: false
           exclude: |

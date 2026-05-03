@@ -9,6 +9,9 @@ OVERRIDES="$ROOT/android-overrides"
 
 echo "[overrides] aplicando widget Android..."
 
+# 0. variables.gradle con minSdk 23 (requerido por plugin biometrico)
+cp "$OVERRIDES/variables.gradle" "$ANDROID/variables.gradle"
+
 # 1. AndroidManifest con receiver del widget
 cp "$OVERRIDES/AndroidManifest.xml" "$ANDROID/app/src/main/AndroidManifest.xml"
 

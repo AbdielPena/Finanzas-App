@@ -45,11 +45,14 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /fi.abbypixel.com/
+          protocol: ftps
+          port: 21
+          server-dir: fi.abbypixel.com/
           local-dir: ./dist/
           dangerous-clean-slate: false
           exclude: |
             **/.htaccess
+          log-level: standard
 
       - name: Notify success
         run: echo "Frontend desplegado en https://fi.abbypixel.com"
