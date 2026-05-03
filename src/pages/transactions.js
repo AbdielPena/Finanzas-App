@@ -288,6 +288,21 @@ export default function renderTransactions() {
 
     // ── Events: filters & search
     page.querySelector('#add-tx-btn')?.addEventListener('click', () => openTxModal());
+
+    // ── Quick action desde widget Android: abre modal con tipo pre-seleccionado
+    try {
+      const hashParts = window.location.hash.split('?');
+      if (hashParts.length > 1) {
+        const params = new URLSearchParams(hashParts[1]);
+        const quickType = params.get('quick');
+        if (quickType && ['ingreso', 'gasto', 'transferencia'].includes(quickType)) {
+          // Limpia la query del hash para no re-disparar
+          history.replaceState(null, '', window.location.pathname + '#/transactions');
+          // Abre modal pre-rellenado
+          setTimeout(() => openTxModal({ tipo: quickType }), 200);
+        }
+      }
+    } catch (e) { console.warn('[quick-action]', e); }
     page.querySelectorAll('[data-filter]').forEach(btn => btn.addEventListener('click', () => {
       filterType = btn.dataset.filter; render();
     }));

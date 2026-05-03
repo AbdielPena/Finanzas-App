@@ -19,6 +19,7 @@ import renderGoals from './pages/goals.js';
 import renderTithe from './pages/tithe.js';
 import renderNotifications, { updateNotifBadge } from './pages/notifications.page.js';
 import renderNotificationPreferences from './pages/notification_preferences.js';
+import renderWidgetInstall from './pages/widget_install.js';
 import renderCategories from './pages/categories.js';
 import renderSettings from './pages/settings.js';
 import renderNotes from './pages/notes.js';
@@ -38,6 +39,8 @@ import {
   getCurrentWorkspace, can
 } from './auth.js';
 import { checkForUpdates } from './update-checker.js';
+import { handleInitialDeepLink, setupDeepLinkListener } from './widget-deeplink.js';
+import { initPushNotifications } from './push-notifications.js';
 
 // ---------- Bootstrap loading screen ----------
 function showBootstrapLoader(text = 'Cargando tus datos...') {
@@ -88,7 +91,15 @@ async function init() {
     // Verificar updates en background (solo Tauri/Capacitor)
     checkForUpdates().catch(() => {});
 
+    // Handler de deep links del widget (abre modal pre-rellenado al tap)
+    setupDeepLinkListener();
+
+    // Push notifications (solo Android via Capacitor + FCM)
+    initPushNotifications().catch(() => {});
+
     showApp();
+    // Procesar deep link inicial despues de mostrar la UI
+    setTimeout(() => handleInitialDeepLink(), 600);
   } catch (e) {
     console.error('Init error:', e);
     document.getElementById('app').innerHTML = `<div style="padding:40px;color:#ff5252;font-family:monospace"><h2>Error de Inicializacion</h2><pre>${e.message}\n${e.stack}</pre></div>`;
@@ -613,6 +624,7 @@ function showApp() {
   router.register('/tithe', renderTithe);
   router.register('/notifications', renderNotifications);
   router.register('/notification-preferences', renderNotificationPreferences);
+  router.register('/widget', renderWidgetInstall);
   router.register('/categories', renderCategories);
   router.register('/settings', can('viewSettings') ? renderSettings : () => { const d = document.createElement('div'); d.className='page-content'; d.innerHTML='<div class="empty-state card"><h3>Acceso restringido</h3><p>No tienes permisos para ver la configuración.</p></div>'; return d; });
   router.register('/notes', renderNotes);

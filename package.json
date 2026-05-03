@@ -7,11 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android",
     "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
@@ -19,13 +17,13 @@
     "cap:add:ios": "npx cap add ios"
   },
   "devDependencies": {
-    "vite": "^6.0.0",
+    "@capacitor/cli": "^6.2.0",
     "@tauri-apps/cli": "^2.1.0",
-    "@capacitor/cli": "^6.2.0"
+    "vite": "^6.0.0"
   },
   "dependencies": {
-    "@capacitor/core": "^6.2.0",
     "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
     "@capacitor/ios": "^6.2.0"
   }
 }

@@ -6,6 +6,7 @@
 // ============================================================
 import { query } from '../config/db.js';
 import { sendNotificationEmail, sendDailySummaryEmail } from './email.service.js';
+import { sendPushTo } from './push.service.js';
 
 // ---------- Helpers ----------
 function daysBetween(target) {
@@ -96,9 +97,22 @@ export async function notify({ workspace_id, user_id, tipo, titulo, mensaje, lev
       }
     }
 
-    // Push (placeholder - requiere FCM setup en Fase B)
+    // Push notification via FCM (si esta configurado)
     if (prefs.push_enabled && prefs.push_token) {
-      // TODO: integrar FCM (firebase admin)
+      try {
+        const r = await sendPushTo(prefs.push_token, {
+          title: titulo,
+          body: mensaje,
+          data: { tipo, ...(metadata || {}) },
+        });
+        if (r.sent) {
+          await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje });
+        } else if (r.error) {
+          await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'failed', error: r.error });
+        }
+      } catch (e) {
+        await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'failed', error: e.message });
+      }
     }
   } catch (e) {
     console.warn('[notify] error procesando preferencias:', e.message);
