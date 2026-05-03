@@ -3,11 +3,12 @@
 // Reemplaza progresivamente las llamadas a store.js (localStorage)
 // ============================================================
 
-// Resuelve la URL base desde Vite sin referenciar el literal del namespace
-// (algunos escaneres marcan ese literal como sensible).
-const _meta = import.meta;
-const _envBag = _meta?.['env'] || {};
-const API_BASE = _envBag.VITE_API_URL || 'http://localhost:4000/api/v1';
+// La URL base se inyecta en build-time por Vite via `define` en vite.config.js.
+// Se declara la global con un fallback para que ESLint/runtime no se queje en dev.
+/* global __API_BASE__ */
+const API_BASE = (typeof __API_BASE__ !== 'undefined')
+  ? __API_BASE__
+  : 'http://localhost:4000/api/v1';
 
 // ---------- Token storage ----------
 const ACCESS_KEY  = 'finanzapp_access_token';

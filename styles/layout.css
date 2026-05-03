@@ -816,7 +816,8 @@
   backdrop-filter: blur(22px) saturate(160%);
   -webkit-backdrop-filter: blur(22px) saturate(160%);
 }
-.theme-popover.show {
+.theme-popover.show,
+.theme-popover.open {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0) scale(1);
