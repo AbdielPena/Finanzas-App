@@ -93,7 +93,7 @@ function txForm(tx = null) {
         </select>
       </div>
       <div class="form-group" id="tx-account-group">
-        <label class="form-label" id="tx-account-label">Cuenta Origen <span class="required">*</span></label>
+        <label class="form-label" id="tx-account-label">${tipo === 'ingreso' ? 'Cuenta Destino' : 'Cuenta Origen'} <span class="required">*</span></label>
         <select class="form-select" id="tx-account" required>
           <option value="">Seleccionar cuenta</option>
           ${getAccountOptions(tx?.cuentaId)}
@@ -529,7 +529,9 @@ export default function renderTransactions() {
         const diezmoCheck = modal.querySelector('#tx-diezmo');
         if (!tx) diezmoCheck.checked = tipo === 'ingreso';
 
-        modal.querySelector('#tx-account-label').textContent = tipo === 'transferencia' ? 'Cuenta Origen' : 'Cuenta Origen <span class="required">*</span>';
+        const accountLabelText = tipo === 'ingreso' ? 'Cuenta Destino' : 'Cuenta Origen';
+        const accountLabelRequired = tipo === 'transferencia' ? '' : ' <span class="required">*</span>';
+        modal.querySelector('#tx-account-label').innerHTML = accountLabelText + accountLabelRequired;
       });
     });
 
