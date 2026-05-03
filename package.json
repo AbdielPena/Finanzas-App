@@ -1,6 +1,6 @@
 {
   "name": "finanzapp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Aplicaci\u00f3n de finanzas personales \u2014 multiplataforma (web + desktop + mobile)",
   "type": "module",
   "scripts": {
@@ -22,6 +22,7 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "^9.1.2",
     "@capacitor/android": "^6.2.0",
     "@capacitor/core": "^6.2.0",
     "@capacitor/ios": "^6.2.0",

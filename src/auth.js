@@ -78,15 +78,34 @@ function saveWorkspaces(ws) {
 }
 
 // ─────────────────────────────────────────────
-// Session
+// Session storage:
+// - En Tauri/Capacitor (apps): localStorage = persiste hasta logout explicito
+// - En web (navegador): sessionStorage = se cierra al cerrar el navegador
+//   pero persiste mientras el navegador este abierto (incluso entre tabs)
 // ─────────────────────────────────────────────
+function isNativeApp() {
+  return typeof window !== 'undefined' && (window.__TAURI__ || window.__TAURI_INTERNALS__ || window.Capacitor);
+}
+function sessionStore() {
+  return isNativeApp() ? localStorage : sessionStorage;
+}
+
 export function getSession() {
-  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
+  try {
+    // Lee primero del storage adecuado, fallback al otro (migracion de versiones viejas)
+    const primary = sessionStore().getItem(SESSION_KEY);
+    if (primary) return JSON.parse(primary);
+    const fallback = (isNativeApp() ? sessionStorage : localStorage).getItem(SESSION_KEY);
+    return fallback ? JSON.parse(fallback) : null;
+  } catch { return null; }
 }
 
 export function setSession(data) {
-  if (data) sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
-  else sessionStorage.removeItem(SESSION_KEY);
+  const store = sessionStore();
+  // Limpia ambos para evitar duplicados de versiones anteriores
+  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  if (data) store.setItem(SESSION_KEY, JSON.stringify(data));
 }
 
 export function getCurrentUser() {

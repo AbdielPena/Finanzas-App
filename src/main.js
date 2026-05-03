@@ -20,6 +20,7 @@ import renderTithe from './pages/tithe.js';
 import renderNotifications, { updateNotifBadge } from './pages/notifications.page.js';
 import renderNotificationPreferences from './pages/notification_preferences.js';
 import renderWidgetInstall from './pages/widget_install.js';
+import renderSecurity from './pages/security.js';
 import renderCategories from './pages/categories.js';
 import renderSettings from './pages/settings.js';
 import renderNotes from './pages/notes.js';
@@ -41,6 +42,7 @@ import {
 import { checkForUpdates } from './update-checker.js';
 import { handleInitialDeepLink, setupDeepLinkListener } from './widget-deeplink.js';
 import { initPushNotifications } from './push-notifications.js';
+import { isBiometricEnabled, authenticateBiometric, isBiometricSupported } from './biometric.js';
 
 // ---------- Bootstrap loading screen ----------
 function showBootstrapLoader(text = 'Cargando tus datos...') {
@@ -63,6 +65,18 @@ async function init() {
     if (!isLoggedIn()) {
       showLoginScreen();
       return;
+    }
+
+    // Si esta habilitada la biometria y estamos en app nativa, pide huella antes
+    if (isBiometricEnabled() && (window.Capacitor || window.__TAURI__)) {
+      showBootstrapLoader('Autenticate con tu huella...');
+      const ok = await authenticateBiometric('Desbloquea FinanzApp');
+      if (!ok) {
+        // Si fallo, manda al login
+        logout();
+        showLoginScreen();
+        return;
+      }
     }
 
     // Set active workspace so store uses the right prefix
@@ -625,6 +639,7 @@ function showApp() {
   router.register('/notifications', renderNotifications);
   router.register('/notification-preferences', renderNotificationPreferences);
   router.register('/widget', renderWidgetInstall);
+  router.register('/security', renderSecurity);
   router.register('/categories', renderCategories);
   router.register('/settings', can('viewSettings') ? renderSettings : () => { const d = document.createElement('div'); d.className='page-content'; d.innerHTML='<div class="empty-state card"><h3>Acceso restringido</h3><p>No tienes permisos para ver la configuración.</p></div>'; return d; });
   router.register('/notes', renderNotes);

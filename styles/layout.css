@@ -905,13 +905,10 @@
 }
 .palette-dot.active .palette-check { opacity: 1; }
 
-/* Mobile FAB tuning */
+/* Mobile FAB tuning - en mobile ocultos para no tapar contenido (acceso via menu) */
 @media (max-width: 960px) {
-  .theme-fab-wrap {
-    bottom: calc(var(--bottom-nav-height, 64px) + 16px);
-    left: 16px;
-  }
-  .theme-fab { width: 48px; height: 48px; }
+  .theme-fab-wrap { display: none !important; }
+  .ai-fab { display: none !important; }
 }
 
 /* ---------- Responsive sidebar/layout rules (base, reforzadas en responsive.css) ---------- */
