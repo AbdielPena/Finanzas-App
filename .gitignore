@@ -4,8 +4,21 @@ node_modules/
 # Build output
 dist/
 
+# Mobile native projects (generated, large)
+android/
+ios/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/icons/*.png
+src-tauri/icons/*.ico
+src-tauri/icons/*.icns
+
 # Backups locales
 backups/
+
+# Backend zip artifacts
+backend/*.zip
 
 # Logs
 *.log
