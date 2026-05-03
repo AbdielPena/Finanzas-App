@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:4000 https://*.tudominio.com; img-src 'self' data: https:; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https: ipc: http://ipc.localhost; img-src 'self' data: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

@@ -266,8 +266,10 @@ export async function loginUser(email, password) {
       // Si la API rechaza con 401, propaga error claro
       if (err?.status === 401) throw new Error('Credenciales invalidas.');
       if (err?.status === 403) throw new Error('Cuenta suspendida o inactiva.');
-      // Otro error: cae a modo local solo si NO esta autenticado en absoluto
-      console.warn('[auth] API login fallo, intentando local:', err.message);
+      // Otros errores: muestra el detalle real para debugging en lugar de caer a localStorage silencioso
+      console.error('[auth] API login fallo:', err);
+      const detail = err?.code || err?.message || 'error desconocido';
+      throw new Error(`Error de conexion al servidor: ${detail}`);
     }
   }
 
