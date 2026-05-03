@@ -37,6 +37,9 @@ jobs:
           $envFile = ".$('env').production"
           "VITE_API_URL=$env:API_URL" | Out-File -FilePath $envFile -Encoding utf8 -NoNewline
 
+      - name: Generate Tauri icons (no estan en git)
+        run: npx @tauri-apps/cli icon public/icons/icon.svg
+
       - name: Build Tauri (.exe + .msi)
         run: npm run tauri:build
 
