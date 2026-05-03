@@ -10,6 +10,7 @@ import { query, getClient } from '../config/db.js';
 import { config } from '../config/env.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { authRequired } from '../middleware/auth.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email.service.js';
 
 const router = Router();
 
@@ -221,6 +222,116 @@ router.post('/logout', authRequired, async (req, res, next) => {
       await query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1', [tokenHash]);
     }
     res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ---------- POST /auth/request-verification ----------
+router.post('/request-verification', authRequired, async (req, res, next) => {
+  try {
+    const userResult = await query('SELECT email, email_verified FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rowCount === 0) throw new HttpError(404, 'Usuario no encontrado');
+    if (userResult.rows[0].email_verified) {
+      return res.json({ ok: true, message: 'Email ya verificado' });
+    }
+
+    const tokenPlain = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(tokenPlain).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+    await query(
+      `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [req.user.id, tokenHash, expiresAt]
+    );
+
+    await sendVerificationEmail(userResult.rows[0].email, tokenPlain);
+    res.json({ ok: true, message: 'Email de verificacion enviado' });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ---------- POST /auth/verify-email ----------
+router.post('/verify-email', async (req, res, next) => {
+  try {
+    const token = req.body?.token;
+    if (!token) throw new HttpError(400, 'Falta token');
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const r = await query(
+      `SELECT id, user_id, expires_at, used_at
+       FROM email_verification_tokens WHERE token_hash = $1`,
+      [tokenHash]
+    );
+    if (r.rowCount === 0) throw new HttpError(400, 'Token invalido');
+    const row = r.rows[0];
+    if (row.used_at) throw new HttpError(400, 'Token ya usado');
+    if (new Date(row.expires_at) < new Date()) throw new HttpError(400, 'Token expirado');
+
+    await query('UPDATE users SET email_verified = TRUE WHERE id = $1', [row.user_id]);
+    await query('UPDATE email_verification_tokens SET used_at = NOW() WHERE id = $1', [row.id]);
+
+    res.json({ ok: true, message: 'Email verificado correctamente' });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ---------- POST /auth/forgot-password ----------
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const email = (req.body?.email || '').toLowerCase().trim();
+    if (!email) throw new HttpError(400, 'Falta email');
+
+    // Siempre responde 200 (no revelar si el email existe)
+    const r = await query('SELECT id FROM users WHERE email = $1 AND estado = $2', [email, 'activo']);
+    if (r.rowCount > 0) {
+      const tokenPlain = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(tokenPlain).digest('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+
+      await query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, ip)
+         VALUES ($1, $2, $3, $4)`,
+        [r.rows[0].id, tokenHash, expiresAt, req.ip]
+      );
+
+      await sendPasswordResetEmail(email, tokenPlain);
+    }
+    res.json({ ok: true, message: 'Si el email existe, recibiras instrucciones' });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ---------- POST /auth/reset-password ----------
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || !password) throw new HttpError(400, 'Faltan campos');
+    if (password.length < 8) throw new HttpError(400, 'Password muy corto');
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const r = await query(
+      `SELECT id, user_id, expires_at, used_at
+       FROM password_reset_tokens WHERE token_hash = $1`,
+      [tokenHash]
+    );
+    if (r.rowCount === 0) throw new HttpError(400, 'Token invalido');
+    const row = r.rows[0];
+    if (row.used_at) throw new HttpError(400, 'Token ya usado');
+    if (new Date(row.expires_at) < new Date()) throw new HttpError(400, 'Token expirado');
+
+    const newHash = await argon2.hash(password, { type: argon2.argon2id });
+
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, row.user_id]);
+    await query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [row.id]);
+    // Revoca todas las sesiones activas
+    await query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [row.user_id]);
+
+    res.json({ ok: true, message: 'Password restablecido' });
   } catch (e) {
     next(e);
   }

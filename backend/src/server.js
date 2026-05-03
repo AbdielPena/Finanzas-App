@@ -12,6 +12,9 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import workspacesRoutes from './routes/workspaces.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import { mountEntities } from './routes/entities.routes.js';
 
 const app = express();
 
@@ -48,13 +51,11 @@ app.use(rateLimit({
 // ---------- Rutas ----------
 app.use('/health', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/workspaces', workspacesRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
-// TODO Fase 4: registrar rutas CRUD para todas las entidades
-// app.use('/api/v1/banks', banksRoutes);
-// app.use('/api/v1/accounts', accountsRoutes);
-// app.use('/api/v1/cards', cardsRoutes);
-// app.use('/api/v1/transactions', transactionsRoutes);
-// ... etc
+// CRUD generico para 21 entidades de negocio
+mountEntities(app);
 
 // ---------- 404 + error handler ----------
 app.use(notFound);

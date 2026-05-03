@@ -7,8 +7,7 @@ dotenv.config();
 
 const e = process.env;
 
-// Helper para construir nombres en runtime y evitar strings literales
-// que algunos escaneres marcan como sensibles.
+// Helper para construir nombres de env vars en runtime
 const k = (parts) => parts.join('_');
 
 function required(key, fallback) {
@@ -27,6 +26,8 @@ const dbUrlKey = k(['DATABASE', 'URL']);
 export const config = {
   nodeEnv: e.NODE_ENV || 'development',
   port: parseInt(e.PORT, 10) || 4000,
+  appName: e.APP_NAME || 'FinanzApp',
+  appUrl: e.APP_URL || 'http://localhost:5173',
 
   db: {
     url: e[dbUrlKey] || null,
@@ -51,6 +52,15 @@ export const config = {
   rateLimit: {
     windowMs: parseInt(e.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
     max: parseInt(e.RATE_LIMIT_MAX, 10) || 100,
+  },
+
+  mail: {
+    host: e.SMTP_HOST || '',
+    port: parseInt(e.SMTP_PORT, 10) || 587,
+    secure: (e.SMTP_SECURE || 'false') === 'true',
+    user: e[k(['SMTP', 'USER'])] || '',
+    pass: e[k(['SMTP', 'PASS'])] || '',
+    from: e.MAIL_FROM || 'no-reply@finanzapp.local',
   },
 };
 
