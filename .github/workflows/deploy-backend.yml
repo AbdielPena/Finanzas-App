@@ -1,0 +1,51 @@
+name: Deploy Backend API
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '!backend/node_modules/**'
+      - '!backend/*.zip'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Upload backend and trigger restart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: FTP upload backend
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /finanzapp-api/
+          local-dir: ./backend/
+          dangerous-clean-slate: false
+          exclude: |
+            **/node_modules/**
+            **/*.zip
+            **/.git*
+            **/coverage/**
+
+      - name: Trigger Passenger restart via FTP
+        env:
+          FTP_HOST: ${{ secrets.FTP_SERVER }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          # Crea archivo tmp/restart.txt para que Phusion Passenger reinicie la app
+          # en el siguiente request. Esta es la forma estandar en cPanel Node.js Apps.
+          sudo apt-get install -y lftp
+          mkdir -p /tmp/restart-trigger
+          touch /tmp/restart-trigger/restart.txt
+          lftp -e "set ftp:ssl-allow yes; set ssl:verify-certificate no; \
+            mkdir -p /finanzapp-api/tmp; \
+            put /tmp/restart-trigger/restart.txt -o /finanzapp-api/tmp/restart.txt; \
+            quit" -u "$FTP_USER","$FTP_PASS" "ftp://$FTP_HOST"
+
+      - name: Notify success
+        run: echo "Backend desplegado en https://apifi.abbypixel.com (Passenger reiniciara en el proximo request)"

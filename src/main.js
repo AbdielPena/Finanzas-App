@@ -36,6 +36,7 @@ import {
   isLoggedIn, logout, getSession, getCurrentUser, getWorkspaceId,
   getCurrentWorkspace, can
 } from './auth.js';
+import { checkForUpdates } from './update-checker.js';
 
 // ---------- Bootstrap loading screen ----------
 function showBootstrapLoader(text = 'Cargando tus datos...') {
@@ -82,6 +83,9 @@ async function init() {
         engine.processAutoPayments();
       });
     } catch (e) { console.warn('Loans engine error:', e); }
+
+    // Verificar updates en background (solo Tauri/Capacitor)
+    checkForUpdates().catch(() => {});
 
     showApp();
   } catch (e) {

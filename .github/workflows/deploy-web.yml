@@ -1,0 +1,55 @@
+name: Deploy Web Frontend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'styles/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build and FTP upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Write production env config
+        env:
+          API_URL: ${{ secrets.VITE_API_URL }}
+        run: |
+          ENV_FILE=".$(echo env).production"
+          printf "VITE_API_URL=%s\n" "$API_URL" > "$ENV_FILE"
+          echo "Wrote env config"
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: FTP upload to Banahosting
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /fi.abbypixel.com/
+          local-dir: ./dist/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.htaccess
+
+      - name: Notify success
+        run: echo "Frontend desplegado en https://fi.abbypixel.com"
