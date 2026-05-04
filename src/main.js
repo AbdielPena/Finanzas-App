@@ -680,3 +680,4 @@ function showApp() {
 // Start app when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
 // Auto-deploy test - Sun May  3 12:14:02     2026
+// trigger
