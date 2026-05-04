@@ -47,7 +47,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           port: 21
-          server-dir: fi.abbypixel.com/
+          server-dir: fi/
           local-dir: ./dist/
           dangerous-clean-slate: false
           exclude: |
