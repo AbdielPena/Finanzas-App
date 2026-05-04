@@ -3,7 +3,7 @@
 // ============================================================
 import {
   isBiometricSupported, isBiometricEnabled, setBiometricEnabled,
-  authenticateBiometric,
+  authenticateBiometric, getBiometricStatus,
 } from '../biometric.js';
 import { showToast } from '../components.js';
 import { logout } from '../auth.js';
@@ -29,8 +29,10 @@ export default function renderSecurity() {
         <h3 style="margin-top:0">Login biometrico</h3>
         ${!supported ? `
           <p style="color:var(--text-secondary)">
-            Tu dispositivo no soporta biometria, o solo esta disponible en la app movil (no en navegador web).
+            Biometria no disponible en este dispositivo / contexto.
           </p>
+          <button id="bio-diag-btn" class="btn btn-ghost" style="margin-top:8px">${icon('settings', 14)} Diagnostico biometria</button>
+          <pre id="bio-diag-out" style="margin-top:12px;background:var(--bg-2);padding:12px;border-radius:8px;font-size:0.75rem;white-space:pre-wrap;display:none"></pre>
         ` : `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
             <div>
@@ -86,6 +88,14 @@ export default function renderSecurity() {
     page.querySelector('#logout-btn')?.addEventListener('click', () => {
       logout();
       location.reload();
+    });
+
+    page.querySelector('#bio-diag-btn')?.addEventListener('click', async () => {
+      const out = page.querySelector('#bio-diag-out');
+      out.style.display = 'block';
+      out.textContent = 'Diagnosticando...';
+      const status = await getBiometricStatus();
+      out.textContent = JSON.stringify(status, null, 2);
     });
   }
 

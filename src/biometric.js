@@ -31,6 +31,40 @@ export async function isBiometricSupported() {
 }
 
 /**
+ * Devuelve detalles completos de soporte biometrico para diagnostico.
+ */
+export async function getBiometricStatus() {
+  const out = {
+    capacitorPresent: typeof window !== 'undefined' && Boolean(window.Capacitor),
+    pluginRegistered: false,
+    pluginLoaded: false,
+    isAvailable: false,
+    biometryType: null,
+    biometryTypes: null,
+    reason: null,
+    code: null,
+    error: null,
+  };
+  if (!out.capacitorPresent) { out.reason = 'No esta corriendo dentro de una APK'; return out; }
+  out.pluginRegistered = Boolean(window.Capacitor.isPluginAvailable?.('BiometricAuth'));
+  if (!out.pluginRegistered) { out.reason = 'Plugin BiometricAuth no registrado en Capacitor'; return out; }
+  const plugin = await getPlugin();
+  out.pluginLoaded = Boolean(plugin);
+  if (!plugin) { out.reason = 'Plugin no se pudo cargar dinamicamente'; return out; }
+  try {
+    const r = await plugin.checkBiometry();
+    out.isAvailable = r.isAvailable;
+    out.biometryType = r.biometryType;
+    out.biometryTypes = r.biometryTypes;
+    out.reason = r.reason || (r.isAvailable ? 'OK' : 'No disponible (sin razon)');
+    out.code = r.code;
+  } catch (e) {
+    out.error = e?.message || String(e);
+  }
+  return out;
+}
+
+/**
  * Pide autenticacion biometrica al usuario.
  * @returns {Promise<boolean>} true si se autentico, false si cancelo o fallo
  */
