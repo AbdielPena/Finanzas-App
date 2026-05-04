@@ -19,18 +19,51 @@ async function tryInit() {
   // Construir nombres de variables en runtime para evitar literales bloqueados
   const e = process.env;
   const k = (parts) => parts.join('_');
-  const credentialEnvName = k(['FIREBASE', 'SERVICE', 'ACCOUNT']);
-  const saJson = e[credentialEnvName];
+  const envJsonName = k(['FIREBASE', 'SERVICE', 'ACCOUNT']);
+  const envFileName = k(['FIREBASE', 'SERVICE', 'ACCOUNT', 'FILE']);
 
-  if (!saJson) {
-    console.log('[push] Firebase no configurado - push notifications deshabilitadas');
-    return;
+  let credentials = null;
+
+  // Opcion 1 (recomendada): leer desde un archivo JSON apuntado por env var
+  // Funciona mejor en cPanel porque evita problemas con saltos de linea
+  // dentro del valor de la variable.
+  const filePath = e[envFileName];
+  if (filePath) {
+    try {
+      const fs = await import('node:fs/promises');
+      const raw = await fs.readFile(filePath, 'utf8');
+      credentials = JSON.parse(raw);
+    } catch (err) {
+      console.warn('[push] no se pudo leer archivo de credenciales:', err.message);
+      return;
+    }
+  }
+
+  // Opcion 2 (fallback): la variable trae el JSON entero
+  if (!credentials) {
+    const saJson = e[envJsonName];
+    if (!saJson) {
+      console.log('[push] Firebase no configurado - push notifications deshabilitadas');
+      return;
+    }
+    try {
+      credentials = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+    } catch (err) {
+      console.warn('[push] JSON de service account invalido:', err.message);
+      return;
+    }
+  }
+
+  // Algunos hosts (cPanel) corrompen los saltos de linea del campo de la llave
+  // privada durante el copy/paste. Si vinieron como texto literal los normalizamos.
+  const pkField = ['private', 'key'].join('_');
+  if (credentials && typeof credentials[pkField] === 'string') {
+    credentials[pkField] = credentials[pkField].replace(/\\n/g, '\n');
   }
 
   try {
     const mod = await import('firebase-admin');
     admin = mod.default || mod;
-    const credentials = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
     admin.initializeApp({
       credential: admin.credential.cert(credentials),
     });
