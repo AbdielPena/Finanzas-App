@@ -9,6 +9,7 @@ import {
   generateAlertsForWorkspace,
   sendDailySummaryFor,
 } from '../services/notifications.service.js';
+import { sendPushTo, isPushAvailable } from '../services/push.service.js';
 
 const router = Router();
 router.use(authRequired);
@@ -76,6 +77,30 @@ router.post('/send-summary', async (req, res, next) => {
   try {
     await sendDailySummaryFor(req.user.id);
     res.json({ ok: true, message: 'Resumen enviado a tu email' });
+  } catch (e) { next(e); }
+});
+
+// ---------- POST /notifications/test-push (envia un push al device del usuario) ----------
+router.post('/test-push', async (req, res, next) => {
+  try {
+    const available = await isPushAvailable();
+    if (!available) {
+      return res.json({ ok: false, reason: 'firebase_not_configured', available });
+    }
+    const r = await query(
+      'SELECT push_token FROM notification_preferences WHERE user_id = $1',
+      [req.user.id]
+    );
+    const tk = r.rows[0]?.push_token;
+    if (!tk) {
+      return res.json({ ok: false, reason: 'no_device_token_registered', hint: 'Abre la APK Android, permite notificaciones, y reintenta.' });
+    }
+    const result = await sendPushTo(tk, {
+      title: 'FinanzApp - Test',
+      body: 'Si ves esto, las notificaciones push funcionan',
+      data: { route: '/dashboard', tipo: 'test' },
+    });
+    res.json({ ok: true, result });
   } catch (e) { next(e); }
 });
 

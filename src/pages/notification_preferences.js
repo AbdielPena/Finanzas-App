@@ -41,6 +41,9 @@ export default function renderNotificationPreferences() {
           <button id="send-now-btn" class="btn btn-secondary" style="margin-top:12px">
             ${icon('mail', 16)} Enviar resumen ahora (test)
           </button>
+          <button id="test-push-btn" class="btn btn-secondary" style="margin-top:12px;margin-left:8px">
+            ${icon('notification', 16)} Probar push (Android)
+          </button>
         </div>
 
         <div class="card" style="padding:24px;margin-bottom:20px">
@@ -156,6 +159,23 @@ export default function renderNotificationPreferences() {
         showToast('success', 'Resumen enviado a tu email');
       } catch (e) {
         showToast('error', 'No se pudo enviar: ' + e.message);
+      }
+    });
+
+    page.querySelector('#test-push-btn')?.addEventListener('click', async () => {
+      try {
+        const r = await prefsApi.testPush();
+        if (r.ok) {
+          showToast('success', 'Push enviado, revisa tu Android');
+        } else if (r.reason === 'no_device_token_registered') {
+          showToast('error', r.hint || 'No hay device token registrado');
+        } else if (r.reason === 'firebase_not_configured') {
+          showToast('error', 'Firebase no esta configurado en backend');
+        } else {
+          showToast('error', 'Push fallo: ' + (r.reason || 'desconocido'));
+        }
+      } catch (e) {
+        showToast('error', 'No se pudo enviar push: ' + e.message);
       }
     });
   }

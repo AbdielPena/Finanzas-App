@@ -255,6 +255,7 @@ export const notificationPrefs = {
   update(data)    { return request('PATCH', '/notifications/preferences', { body: data }); },
   triggerAlerts() { return request('POST', '/notifications/trigger-alerts'); },
   sendSummary()   { return request('POST', '/notifications/send-summary'); },
+  testPush()      { return request('POST', '/notifications/test-push'); },
   log(limit = 50) { return request('GET', '/notifications/log', { query: { limit } }); },
 };
 
