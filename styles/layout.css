@@ -99,6 +99,14 @@
   margin-bottom: 14px;
 }
 .sidebar-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -107,15 +115,57 @@
   padding: 10px 12px 8px;
   white-space: nowrap;
   overflow: hidden;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-section-title:hover {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+.sidebar-section-title svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform 0.25s ease;
+}
+.sidebar-section.collapsed .sidebar-section-title svg {
+  transform: rotate(-90deg);
+}
+.sidebar-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  max-height: 1000px;
+  transition: max-height 0.3s ease, opacity 0.2s ease, padding-top 0.2s ease;
+  opacity: 1;
+  padding-top: 4px;
+}
+.sidebar-section.collapsed .sidebar-section-items {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  pointer-events: none;
 }
 .sidebar-collapsed .sidebar-section-title {
   text-align: center;
+  justify-content: center;
   font-size: 0;
+  cursor: default;
 }
+.sidebar-collapsed .sidebar-section-title svg { display: none; }
 .sidebar-collapsed .sidebar-section-title::after {
   content: '•••';
   font-size: 0.6rem;
   letter-spacing: 0;
+}
+/* Cuando el sidebar esta colapsado en modo iconos, ignorar el estado collapsed por seccion */
+.sidebar-collapsed .sidebar-section.collapsed .sidebar-section-items {
+  max-height: 1000px;
+  opacity: 1;
+  padding-top: 4px;
+  pointer-events: auto;
 }
 
 .nav-item {

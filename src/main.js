@@ -188,99 +188,116 @@ function showApp() {
           <span class="sidebar-logo-text">FinanzApp</span>
         </div>
         <nav class="sidebar-nav">
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Principal</div>
-            <button class="nav-item" data-route="/dashboard">
-              ${icon('dashboard', 20)}
-              <span class="nav-item-label">Dashboard</span>
+          <div class="sidebar-section" data-section="principal">
+            <button class="sidebar-section-title" type="button">
+              <span>Principal</span>
+              ${icon('chevronDown', 14)}
             </button>
+            <div class="sidebar-section-items">
+              <button class="nav-item" data-route="/dashboard">
+                ${icon('dashboard', 20)}
+                <span class="nav-item-label">Dashboard</span>
+              </button>
+            </div>
           </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Finanzas</div>
-            <button class="nav-item" data-route="/accounts">
-              ${icon('bank', 20)}
-              <span class="nav-item-label">Cuentas Bancarias</span>
+          <div class="sidebar-section" data-section="finanzas">
+            <button class="sidebar-section-title" type="button">
+              <span>Finanzas</span>
+              ${icon('chevronDown', 14)}
             </button>
-            <button class="nav-item" data-route="/cards">
-              ${icon('creditCard', 20)}
-              <span class="nav-item-label">Tarjetas de Crédito</span>
-            </button>
-            <button class="nav-item" data-route="/transactions">
-              ${icon('transaction', 20)}
-              <span class="nav-item-label">Transacciones</span>
-            </button>
+            <div class="sidebar-section-items">
+              <button class="nav-item" data-route="/accounts">
+                ${icon('bank', 20)}
+                <span class="nav-item-label">Cuentas Bancarias</span>
+              </button>
+              <button class="nav-item" data-route="/cards">
+                ${icon('creditCard', 20)}
+                <span class="nav-item-label">Tarjetas de Crédito</span>
+              </button>
+              <button class="nav-item" data-route="/external_cards">
+                ${icon('creditCard', 20)}
+                <span class="nav-item-label">Tarjetas Externas</span>
+              </button>
+              <button class="nav-item" data-route="/transactions">
+                ${icon('transaction', 20)}
+                <span class="nav-item-label">Transacciones</span>
+              </button>
+            </div>
           </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Gestión</div>
-            <button class="nav-item" data-route="/subscriptions">
-              ${icon('subscription', 20)}
-              <span class="nav-item-label">Suscripciones</span>
+          <div class="sidebar-section" data-section="gestion">
+            <button class="sidebar-section-title" type="button">
+              <span>Gestión</span>
+              ${icon('chevronDown', 14)}
             </button>
-            <button class="nav-item" data-route="/debts">
-              ${icon('handCoins', 20)}
-              <span class="nav-item-label">Deudas</span>
-            </button>
-            <button class="nav-item" data-route="/receivables">
-              ${icon('arrowDown', 20)}
-              <span class="nav-item-label">Cuentas por Cobrar</span>
-            </button>
-            <button class="nav-item" data-route="/payables">
-              ${icon('arrowUp', 20)}
-              <span class="nav-item-label">Cuentas por Pagar</span>
-            </button>
-            <button class="nav-item" data-route="/pending" style="${store.filter('transactions',t=>t.estado==='hold').length > 0 ? 'color:#f59e0b' : ''}">
-              ${icon('clock', 20)}
-              <span class="nav-item-label">Pendientes ${store.filter('transactions',t=>t.estado==='hold').length > 0 ? `<span style="background:#f59e0b;color:#000;font-size:0.6rem;padding:1px 5px;border-radius:10px;margin-left:4px">${store.filter('transactions',t=>t.estado==='hold').length}</span>` : ''}</span>
-            </button>
+            <div class="sidebar-section-items">
+              <button class="nav-item" data-route="/subscriptions">
+                ${icon('subscription', 20)}
+                <span class="nav-item-label">Suscripciones</span>
+              </button>
+              <button class="nav-item" data-route="/debts">
+                ${icon('handCoins', 20)}
+                <span class="nav-item-label">Deudas</span>
+              </button>
+              <button class="nav-item" data-route="/receivables">
+                ${icon('arrowDown', 20)}
+                <span class="nav-item-label">Cuentas por Cobrar</span>
+              </button>
+              <button class="nav-item" data-route="/payables">
+                ${icon('arrowUp', 20)}
+                <span class="nav-item-label">Cuentas por Pagar</span>
+              </button>
+              <button class="nav-item" data-route="/pending" style="${store.filter('transactions',t=>t.estado==='hold').length > 0 ? 'color:#f59e0b' : ''}">
+                ${icon('clock', 20)}
+                <span class="nav-item-label">Pendientes ${store.filter('transactions',t=>t.estado==='hold').length > 0 ? `<span style="background:#f59e0b;color:#000;font-size:0.6rem;padding:1px 5px;border-radius:10px;margin-left:4px">${store.filter('transactions',t=>t.estado==='hold').length}</span>` : ''}</span>
+              </button>
+            </div>
           </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Terceros</div>
-            <button class="nav-item" data-route="/external_cards">
-              ${icon('creditCard', 20)}
-              <span class="nav-item-label">Tarjetas Externas</span>
+          <div class="sidebar-section" data-section="avanzado">
+            <button class="sidebar-section-title" type="button">
+              <span>Avanzado</span>
+              ${icon('chevronDown', 14)}
             </button>
+            <div class="sidebar-section-items">
+              <button class="nav-item" data-route="/goals">
+                ${icon('goal', 20)}
+                <span class="nav-item-label">Metas Financieras</span>
+              </button>
+              <button class="nav-item" data-route="/tithe">
+                ${icon('tithe', 20)}
+                <span class="nav-item-label">Cálculo del ${store.getSetting('tithe_percentage', 10)}%</span>
+              </button>
+              <button class="nav-item" data-route="/notes">
+                ${icon('fileText', 20)}
+                <span class="nav-item-label">Notas</span>
+              </button>
+              ${can('manageUsers') ? `
+              <button class="nav-item" data-route="/users">
+                ${icon('users', 20)}
+                <span class="nav-item-label">Usuarios</span>
+              </button>` : ''}
+              <button class="nav-item" data-route="/pricing">
+                ${icon('star', 20)}
+                <span class="nav-item-label">Planes</span>
+              </button>
+            </div>
           </div>
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Avanzado</div>
-            <button class="nav-item" data-route="/goals">
-              ${icon('goal', 20)}
-              <span class="nav-item-label">Metas Financieras</span>
+          ${currentUser?.isSuperAdmin ? `
+          <div class="sidebar-section sidebar-section-warning" data-section="admin_global">
+            <button class="sidebar-section-title" type="button" style="color:var(--color-warning)">
+              <span>Administración Global</span>
+              ${icon('chevronDown', 14)}
             </button>
-            <button class="nav-item" data-route="/tithe">
-              ${icon('tithe', 20)}
-              <span class="nav-item-label">Cálculo del ${store.getSetting('tithe_percentage', 10)}%</span>
-            </button>
-            <button class="nav-item" data-route="/notes">
-              ${icon('fileText', 20)}
-              <span class="nav-item-label">Notas</span>
-            </button>
-            ${can('manageUsers') ? `
-            <button class="nav-item" data-route="/users">
-              ${icon('users', 20)}
-              <span class="nav-item-label">Usuarios</span>
-            </button>` : ''}
-
-            <button class="nav-item" data-route="/pricing">
-              ${icon('star', 20)}
-              <span class="nav-item-label">Planes</span>
-            </button>
-            ${can('manageUsers') ? `
-            <button class="nav-item" data-route="/users">
-              ${icon('users', 20)}
-              <span class="nav-item-label">Usuarios</span>
-            </button>` : ''}
-
-            ${currentUser?.isSuperAdmin ? `
-            <div class="sidebar-section-title" style="margin-top:10px;color:var(--color-warning)">Administración Global</div>
-            <button class="nav-item" data-route="/superadmin" style="color:var(--color-warning)">
-              ${icon('lock', 20)}
-              <span class="nav-item-label">Super Administrador</span>
-            </button>
-            <button class="nav-item" data-route="/admin/planes" style="color:var(--color-warning)">
-              ${icon('star', 20)}
-              <span class="nav-item-label">Admin Planes</span>
-            </button>` : ''}
-          </div>
+            <div class="sidebar-section-items">
+              <button class="nav-item" data-route="/superadmin" style="color:var(--color-warning)">
+                ${icon('lock', 20)}
+                <span class="nav-item-label">Super Administrador</span>
+              </button>
+              <button class="nav-item" data-route="/admin/planes" style="color:var(--color-warning)">
+                ${icon('star', 20)}
+                <span class="nav-item-label">Admin Planes</span>
+              </button>
+            </div>
+          </div>` : ''}
         </nav>
         <div class="sidebar-footer">
           <!-- User info (click → profile) -->
@@ -519,6 +536,23 @@ function showApp() {
   if (store.getSetting('sidebarCollapsed')) {
     document.getElementById('app-shell')?.classList.add('sidebar-collapsed');
   }
+
+  // Collapsible sidebar sections
+  document.querySelectorAll('.sidebar-section').forEach((section) => {
+    const sectionId = section.dataset.section;
+    if (!sectionId) return;
+    // Restore collapsed state
+    if (store.getSetting('sidebarSection_' + sectionId)) {
+      section.classList.add('collapsed');
+    }
+    const titleBtn = section.querySelector('.sidebar-section-title');
+    titleBtn?.addEventListener('click', () => {
+      // No colapsar si el sidebar entero esta colapsado (modo iconos)
+      if (document.getElementById('app-shell')?.classList.contains('sidebar-collapsed')) return;
+      section.classList.toggle('collapsed');
+      store.setSetting('sidebarSection_' + sectionId, section.classList.contains('collapsed'));
+    });
+  });
 
   // Theme toggle (header)
   const applyTheme = (mode) => {
