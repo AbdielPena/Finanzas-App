@@ -1,4 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -10,6 +13,8 @@ export default defineConfig(({ mode }) => {
     define: {
       // Inyecta la URL del API directamente en el build (compile-time)
       __API_BASE__: JSON.stringify(apiUrl),
+      // Version desde package.json (compile-time) para el update-checker
+      __APP_VERSION__: JSON.stringify(pkg.version),
     },
     server: {
       port: 5173,

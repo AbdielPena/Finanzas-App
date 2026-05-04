@@ -3,10 +3,11 @@
 // publicada en GitHub Releases y muestra banner al usuario
 // ============================================================
 
-const APP_VERSION = '1.0.14'; // sincronizar con package.json y tauri.conf.json
+// __APP_VERSION__ se inyecta en build time desde package.json (vite.config.js)
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
 const GITHUB_REPO = 'AbdielPena/Finanzas-App';
 const RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
+const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 min (antes era 1 hora — demasiado lento)
 const STORAGE_KEY = 'finanzapp_last_update_check';
 const DISMISSED_KEY = 'finanzapp_dismissed_version';
 
