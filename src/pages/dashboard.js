@@ -106,7 +106,8 @@ export default function renderDashboard() {
     (t.aplicaDiezmo === true || t.categoriaId === 'cat_salary' || (t.aplicaDiezmo === undefined && t.tipo === 'ingreso'))
     && t.fecha && t.fecha.startsWith(currentMonth)
   ).reduce((s, t) => s + (parseFloat(t.monto) || 0), 0);
-  const titheAmount = incomeBase10 * 0.1;
+  const tithePercent = parseFloat(store.getSetting('tithe_percentage', 10)) || 10;
+  const titheAmount = incomeBase10 * (tithePercent / 100);
 
   // Gastos por categoría
   const expenseByCategory = {};
@@ -452,7 +453,7 @@ export default function renderDashboard() {
     <div class="grid grid-3" style="margin-top:24px">
       <div class="card">
         <div class="card-header">
-          <h3>Aparta el 10%</h3>
+          <h3>Aparta el ${tithePercent}%</h3>
         </div>
         <div style="padding:8px 0">
           <div style="font-size:0.7rem;color:var(--text-2);letter-spacing:0.03em;text-transform:uppercase;margin-bottom:6px">Base de ingresos</div>

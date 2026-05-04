@@ -48,7 +48,8 @@ export default function renderTithe() {
     const totalDeductions = deductions.reduce((s, d) => s + (parseFloat(d.monto) || 0), 0);
 
     const netBase = Math.max(0, grossIncome - totalDeductions);
-    const currentTithe = netBase * 0.10;
+    const tithePercent = parseFloat(store.getSetting('tithe_percentage', 10)) || 10;
+    const currentTithe = netBase * (tithePercent / 100);
     
     const currentRecord = getTitheRecord(currentMonth);
     const currentPaid = currentRecord ? (parseFloat(currentRecord.montoPagado) || 0) : 0;
@@ -57,8 +58,16 @@ export default function renderTithe() {
     page.innerHTML = `
       <div class="page-header">
         <div class="page-header-left">
-          <h1>Cálculo del 10% (Base Neta)</h1>
+          <h1>Cálculo del ${tithePercent}% (Base Neta)</h1>
           <p>Supervisa tus ingresos, aplica excepciones y calcula tu separación</p>
+        </div>
+        <div class="page-header-actions">
+          <div style="display:flex;align-items:center;gap:8px;background:var(--bg-card);padding:8px 14px;border-radius:10px;border:1px solid var(--border)">
+            <label style="font-size:0.85rem;color:var(--text-secondary)">Mi porcentaje:</label>
+            <input type="number" id="tithe-pct-input" value="${tithePercent}" min="0.1" max="100" step="0.5"
+              style="width:70px;padding:4px 8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);text-align:center" />
+            <span>%</span>
+          </div>
         </div>
       </div>
 
@@ -79,11 +88,11 @@ export default function renderTithe() {
             <div style="font-size:1.3rem;font-weight:700;color:var(--color-expense)">- ${formatMoney(totalDeductions)}</div>
           </div>
           <div style="background:rgba(255,255,255,0.03);padding:8px 12px;border-radius:6px;border-left:2px solid var(--accent-primary)">
-            <div style="font-size:0.8rem;color:var(--accent-primary);margin-bottom:4px">Base Neta para 10%</div>
+            <div style="font-size:0.8rem;color:var(--accent-primary);margin-bottom:4px">Base Neta para ${tithePercent}%</div>
             <div style="font-size:1.4rem;font-weight:700;color:var(--text-primary)">${formatMoney(netBase)}</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:4px">10% Calculado</div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:4px">${tithePercent}% Calculado</div>
             <div style="font-size:1.5rem;font-weight:700;font-family:var(--font-heading);color:var(--accent-primary)">${formatMoney(currentTithe)}</div>
           </div>
         </div>
@@ -107,7 +116,7 @@ export default function renderTithe() {
               <span style="font-size:0.85rem;color:var(--text-secondary)">Resta separar: <strong>${formatMoney(Math.max(0, currentTithe - currentPaid))}</strong></span>
               <button class="btn btn-primary btn-sm" id="register-tithe-btn">${icon('plus', 16)} Registrar Aporte</button>
             </div>
-          ` : '<div style="text-align:center;color:var(--color-income);font-weight:600">✓ Meta del 10% completada para este mes</div>'}
+          ` : `<div style="text-align:center;color:var(--color-income);font-weight:600">✓ Meta del ${tithePercent}% completada para este mes</div>`}
         </div>
       </div>
 
@@ -157,6 +166,21 @@ export default function renderTithe() {
 
       </div>
     `;
+
+    // SAVE custom percentage (debounced + commits on blur/enter)
+    const pctInput = page.querySelector('#tithe-pct-input');
+    if (pctInput) {
+      const savePct = () => {
+        let v = parseFloat(pctInput.value);
+        if (isNaN(v) || v <= 0) v = 10;
+        if (v > 100) v = 100;
+        store.setSetting('tithe_percentage', v);
+        showToast('success', `Porcentaje actualizado a ${v}%`);
+        render();
+      };
+      pctInput.addEventListener('change', savePct);
+      pctInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pctInput.blur(); } });
+    }
 
     // ADD A DEDUCTION
     page.querySelector('#add-deduct-btn')?.addEventListener('click', () => {

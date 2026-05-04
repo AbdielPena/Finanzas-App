@@ -248,7 +248,7 @@ function showApp() {
             </button>
             <button class="nav-item" data-route="/tithe">
               ${icon('tithe', 20)}
-              <span class="nav-item-label">Cálculo del 10%</span>
+              <span class="nav-item-label">Cálculo del ${store.getSetting('tithe_percentage', 10)}%</span>
             </button>
             <button class="nav-item" data-route="/notes">
               ${icon('fileText', 20)}
@@ -401,7 +401,7 @@ function showApp() {
           <button class="rp-pcard" data-route="/tithe">
             <div class="rp-pcard-icon" style="background:var(--ok-soft);color:var(--ok)">${icon('tithe', 16)}</div>
             <div>
-              <div class="rp-pcard-title">Aparta el 10%</div>
+              <div class="rp-pcard-title">Aparta el ${store.getSetting('tithe_percentage', 10)}%</div>
               <div class="rp-pcard-sub">Cálculo automático</div>
             </div>
             ${icon('arrowUp', 14)}
