@@ -1,74 +1,66 @@
 // ============================================================
 // Biometric Auth - login con huella/face en Android
-// Usa @aparajita/capacitor-biometric-auth v9 (oficial Capacitor 6+)
+// Usa @capgo/capacitor-native-biometric v6 (Capacitor 6 compat)
 // Solo se activa en Capacitor (APK Android). En web/Tauri es noop.
 // ============================================================
 
 const BIO_KEY = 'finanzapp_biometric_enabled';
-const PLUGIN_NAME = 'BiometricAuthNative';
-
-function isAvailable() {
-  return typeof window !== 'undefined' && window.Capacitor?.isPluginAvailable?.(PLUGIN_NAME);
-}
+const PLUGIN_NAME = 'NativeBiometric';
 
 async function getPlugin() {
+  if (typeof window === 'undefined' || !window.Capacitor) return null;
   try {
-    const mod = await import('@aparajita/capacitor-biometric-auth');
-    return mod.BiometricAuth;
+    const mod = await import('@capgo/capacitor-native-biometric');
+    return mod.NativeBiometric;
   } catch { return null; }
 }
 
 /**
- * Verifica si el dispositivo soporta biometria (huella, face, etc).
+ * Verifica si el dispositivo soporta biometria.
  */
 export async function isBiometricSupported() {
   const plugin = await getPlugin();
   if (!plugin) return false;
   try {
-    const r = await plugin.checkBiometry();
+    const r = await plugin.isAvailable();
     return r.isAvailable === true;
   } catch { return false; }
 }
 
 /**
- * Devuelve detalles completos de soporte biometrico para diagnostico.
+ * Devuelve detalles para diagnostico.
  */
 export async function getBiometricStatus() {
   const out = {
     capacitorPresent: typeof window !== 'undefined' && Boolean(window.Capacitor),
+    pluginsRegistered: [],
     pluginRegistered: false,
-    pluginRegisteredNames: [],
     pluginLoaded: false,
     isAvailable: false,
     biometryType: null,
-    biometryTypes: null,
-    reason: null,
-    code: null,
+    errorCode: null,
+    errorMessage: null,
     error: null,
   };
-  if (!out.capacitorPresent) { out.reason = 'No esta corriendo dentro de una APK'; return out; }
-  // Lista los plugins registrados para debug
-  const plugins = window.Capacitor?.Plugins || {};
-  out.pluginRegisteredNames = Object.keys(plugins);
+  if (!out.capacitorPresent) { out.errorMessage = 'No esta corriendo dentro de una APK'; return out; }
+  out.pluginsRegistered = Object.keys(window.Capacitor?.Plugins || {});
   out.pluginRegistered = Boolean(window.Capacitor.isPluginAvailable?.(PLUGIN_NAME));
-  if (!out.pluginRegistered) { out.reason = `Plugin ${PLUGIN_NAME} no registrado en Capacitor`; }
-  // Intenta cargarlo y llamarlo igual (a veces isPluginAvailable miente)
+  if (!out.pluginRegistered) { out.errorMessage = `Plugin ${PLUGIN_NAME} no registrado en Capacitor`; }
   const plugin = await Promise.race([
     getPlugin(),
     new Promise((res) => setTimeout(() => res(null), 3000)),
   ]);
   out.pluginLoaded = Boolean(plugin);
-  if (!plugin) { out.reason = out.reason || 'Plugin no se pudo cargar (timeout o error)'; return out; }
+  if (!plugin) { out.errorMessage = out.errorMessage || 'Plugin no se pudo cargar (timeout)'; return out; }
   try {
     const r = await Promise.race([
-      plugin.checkBiometry(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('checkBiometry timeout 5s')), 5000)),
+      plugin.isAvailable(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('isAvailable timeout 5s')), 5000)),
     ]);
     out.isAvailable = r.isAvailable;
     out.biometryType = r.biometryType;
-    out.biometryTypes = r.biometryTypes;
-    out.reason = r.reason || (r.isAvailable ? 'OK' : 'No disponible (sin razon)');
-    out.code = r.code;
+    out.errorCode = r.errorCode;
+    out.errorMessage = r.errorCode ? `errorCode=${r.errorCode}` : (r.isAvailable ? 'OK' : 'No disponible');
   } catch (e) {
     out.error = e?.message || String(e);
   }
@@ -82,12 +74,11 @@ export async function authenticateBiometric(reason = 'Inicia sesion en FinanzApp
   const plugin = await getPlugin();
   if (!plugin) return false;
   try {
-    await plugin.authenticate({
+    await plugin.verifyIdentity({
       reason,
-      cancelTitle: 'Cancelar',
-      androidTitle: 'FinanzApp',
-      androidSubtitle: 'Autenticacion biometrica',
-      androidConfirmationRequired: false,
+      title: 'FinanzApp',
+      subtitle: 'Autenticacion biometrica',
+      description: reason,
     });
     return true;
   } catch (e) {
