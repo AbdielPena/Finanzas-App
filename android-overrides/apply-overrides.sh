@@ -95,4 +95,24 @@ print("[overrides] dependencias firebase-messaging anadidas a app/build.gradle")
 PYEOF
 fi
 
-echo "[overrides] OK - widget + Firebase aplicados al proyecto Android"
+# 8. Sincronizar versionName de package.json al app/build.gradle
+APP_VERSION=$(node -p "require('$ROOT/package.json').version")
+echo "[overrides] sincronizando versionName a $APP_VERSION..."
+python3 - <<PYEOF
+import re
+path = "$APP_GRADLE"
+ver = "$APP_VERSION"
+with open(path, 'r') as f:
+    content = f.read()
+content = re.sub(r'versionName\s+"[^"]*"', f'versionName "{ver}"', content, count=1)
+# Tambien bumpear versionCode (cada parte * 10000 para que crezca monotonicamente)
+parts = [int(x) for x in ver.split('.')]
+while len(parts) < 3: parts.append(0)
+code = parts[0] * 10000 + parts[1] * 100 + parts[2]
+content = re.sub(r'versionCode\s+\d+', f'versionCode {code}', content, count=1)
+with open(path, 'w') as f:
+    f.write(content)
+print(f'[overrides] versionName={ver} versionCode={code}')
+PYEOF
+
+echo "[overrides] OK - widget + Firebase + version aplicados al proyecto Android"
