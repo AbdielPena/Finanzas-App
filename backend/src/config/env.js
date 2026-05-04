@@ -51,7 +51,7 @@ export const config = {
 
   rateLimit: {
     windowMs: parseInt(e.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
-    max: parseInt(e.RATE_LIMIT_MAX, 10) || 100,
+    max: parseInt(e.RATE_LIMIT_MAX, 10) || 2000,
   },
 
   mail: {
