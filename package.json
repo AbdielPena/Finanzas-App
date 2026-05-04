@@ -22,11 +22,11 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@aparajita/capacitor-biometric-auth": "^8.0.2",
     "@capacitor/android": "^6.2.0",
     "@capacitor/core": "^6.2.0",
     "@capacitor/ios": "^6.2.0",
     "@capacitor/preferences": "^6.0.4",
-    "@capacitor/push-notifications": "^6.0.5"
+    "@capacitor/push-notifications": "^6.0.5",
+    "capacitor-native-biometric": "^4.2.2"
   }
 }
