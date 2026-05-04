@@ -143,9 +143,15 @@ export function isLoggedIn() {
 }
 
 export function logout() {
-  // Llama API logout en background (no bloqueamos UI)
-  api.auth.logout().catch(() => {});
+  // Limpia TODO sincronamente ANTES de cualquier reload
   setSession(null);
+  // Limpia tokens y workspace ya (no esperar a la API)
+  try { tokens.clear(); } catch {}
+  try { wsCtx.clear(); } catch {}
+  // Llama API logout en background (fire-and-forget)
+  api.auth.logout().catch(() => {});
+  // Limpia tambien posible cache legacy
+  try { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
 // ─────────────────────────────────────────────
