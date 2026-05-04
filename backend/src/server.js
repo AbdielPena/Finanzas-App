@@ -42,13 +42,18 @@ if (config.nodeEnv !== 'test') {
 }
 
 // ---------- Rate limit global ----------
-app.use(rateLimit({
+// Aplicado solo a endpoints sensibles. CRUD, notifications, admin no se limitan
+// (los limites estrictos por endpoint estan en auth.routes.js).
+const globalLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.max,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'rate_limit_exceeded' },
-}));
+  // No contar requests autenticados (el usuario logueado puede hacer las que quiera).
+  skip: (req) => Boolean(req.headers.authorization),
+});
+app.use(globalLimiter);
 
 // ---------- Rutas ----------
 app.use('/health', healthRoutes);
