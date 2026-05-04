@@ -26,8 +26,15 @@
     z-index: 100;
     width: 260px;
     box-shadow: var(--sh-float);
+    /* Reservar espacio inferior para que la bottom-nav no tape items */
+    padding-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom));
   }
   .sidebar.mobile-open { transform: translateX(0); }
+  /* El footer del sidebar (Categorias/Configuracion/Seguridad/etc) tambien
+     necesita margen para no esconderse detras de la bottom-nav */
+  .sidebar-footer {
+    margin-bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom));
+  }
 
   .app-main { margin-left: 0 !important; }
 
