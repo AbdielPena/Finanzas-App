@@ -44,6 +44,10 @@ export default function renderNotificationPreferences() {
           <button id="test-push-btn" class="btn btn-secondary" style="margin-top:12px;margin-left:8px">
             ${icon('notification', 16)} Probar push (Android)
           </button>
+          <button id="diag-push-btn" class="btn btn-ghost" style="margin-top:12px;margin-left:8px">
+            ${icon('settings', 16)} Diagnostico push
+          </button>
+          <pre id="diag-push-out" style="margin-top:12px;background:var(--bg-2);padding:12px;border-radius:8px;font-size:0.75rem;white-space:pre-wrap;display:none"></pre>
         </div>
 
         <div class="card" style="padding:24px;margin-bottom:20px">
@@ -160,6 +164,48 @@ export default function renderNotificationPreferences() {
       } catch (e) {
         showToast('error', 'No se pudo enviar: ' + e.message);
       }
+    });
+
+    page.querySelector('#diag-push-btn')?.addEventListener('click', async () => {
+      const out = page.querySelector('#diag-push-out');
+      out.style.display = 'block';
+      const lines = [];
+      const log = (msg) => { lines.push(msg); out.textContent = lines.join('\n'); };
+      log('1. Capacitor disponible: ' + Boolean(window.Capacitor));
+      log('   isNativePlatform: ' + (window.Capacitor?.isNativePlatform?.() ?? 'n/a'));
+      log('   getPlatform: ' + (window.Capacitor?.getPlatform?.() ?? 'n/a'));
+      const plugins = window.Capacitor?.Plugins || {};
+      log('2. Plugins cargados: ' + Object.keys(plugins).join(', '));
+      const PN = plugins.PushNotifications;
+      if (!PN) { log('ERROR: PushNotifications plugin NO disponible en window.Capacitor.Plugins'); return; }
+      log('3. PushNotifications plugin OK');
+      try {
+        const perm = await PN.checkPermissions();
+        log('4. Permiso actual: ' + JSON.stringify(perm));
+        if (perm.receive !== 'granted') {
+          const req = await PN.requestPermissions();
+          log('5. Pedido permiso: ' + JSON.stringify(req));
+        }
+        log('6. Llamando register()...');
+        await PN.register();
+        log('7. register() OK - esperando token...');
+      } catch (e) {
+        log('ERROR en flow: ' + e.message);
+      }
+      // Listen for registration
+      PN.addListener?.('registration', async (t) => {
+        log('8. TOKEN recibido: ' + (t.value || '').slice(0, 30) + '...');
+        try {
+          const { notificationPrefs } = await import('../api-client.js');
+          await notificationPrefs.update({ push_token: t.value });
+          log('9. Token guardado en backend OK');
+        } catch (e) {
+          log('ERROR guardando token: ' + e.message);
+        }
+      });
+      PN.addListener?.('registrationError', (e) => {
+        log('ERROR de FCM: ' + JSON.stringify(e));
+      });
     });
 
     page.querySelector('#test-push-btn')?.addEventListener('click', async () => {
