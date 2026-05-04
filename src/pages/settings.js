@@ -214,7 +214,19 @@ export default function renderSettings() {
 
       <!-- COLUMNA DERECHA -->
       <div>
-        
+
+        <!-- Link rapido a preferencias avanzadas de notificaciones -->
+        <div class="card" style="margin-bottom:24px;cursor:pointer" onclick="window.location.hash='#/notification-preferences'">
+          <div style="display:flex;align-items:center;gap:14px;padding:4px 0">
+            <div style="color:var(--accent-primary)">${icon('notification', 22)}</div>
+            <div style="flex:1">
+              <div style="font-weight:600">Preferencias de Notificaciones</div>
+              <div style="font-size:0.8rem;color:var(--text-secondary)">Email, push (Android), resumenes y diagnostico</div>
+            </div>
+            <div style="color:var(--text-secondary)">${icon('arrowDown', 18)}</div>
+          </div>
+        </div>
+
         <!-- Notificaciones Avanzadas -->
         <div class="card" style="margin-bottom:24px">
           <div class="card-header">
