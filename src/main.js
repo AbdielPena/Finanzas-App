@@ -302,6 +302,14 @@ function showApp() {
             ${icon('settings', 20)}
             <span class="nav-item-label">Configuración</span>
           </button>
+          <button class="nav-item" data-route="/security">
+            ${icon('lock', 20)}
+            <span class="nav-item-label">Seguridad</span>
+          </button>
+          <button class="nav-item" data-route="/widget">
+            ${icon('plus', 20)}
+            <span class="nav-item-label">Widget Android</span>
+          </button>
         </div>
       </aside>
 
