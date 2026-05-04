@@ -131,6 +131,44 @@ export async function sendDailySummaryEmail(toEmail, { nombre, summary }) {
   });
 }
 
+export async function sendWelcomeEmail(toEmail, { nombre, workspaceNombre }) {
+  return send({
+    to: toEmail,
+    subject: `[${config.appName}] Bienvenido ${nombre} 👋`,
+    html: baseTemplate(`Bienvenido a ${config.appName}`, `
+      <p>Hola ${nombre},</p>
+      <p>Tu cuenta fue creada correctamente. Tu workspace inicial es <strong>${workspaceNombre}</strong>.</p>
+      <p>Algunas cosas que puedes hacer ahora:</p>
+      <ul>
+        <li>Registrar tu primer banco y cuentas</li>
+        <li>Anotar tus suscripciones recurrentes</li>
+        <li>Configurar tu porcentaje de ahorro/diezmo</li>
+        <li>Activar el resumen diario por email</li>
+      </ul>
+      <p style="margin-top:20px">
+        <a href="${config.appUrl}" style="display:inline-block;padding:12px 24px;background:#6c63ff;color:white;text-decoration:none;border-radius:8px;font-weight:600">Abrir FinanzApp</a>
+      </p>
+    `),
+    text: `Bienvenido a ${config.appName}, ${nombre}! Tu workspace ${workspaceNombre} esta listo. Abre la app: ${config.appUrl}`,
+  });
+}
+
+export async function sendPasswordChangedEmail(toEmail, { nombre, ip }) {
+  return send({
+    to: toEmail,
+    subject: `[${config.appName}] Tu contraseña fue cambiada`,
+    html: baseTemplate('Contraseña actualizada', `
+      <p>Hola ${nombre},</p>
+      <p>Tu contraseña fue cambiada exitosamente. Todas tus sesiones activas fueron cerradas por seguridad.</p>
+      <p style="font-size:0.85rem;color:#666">IP del cambio: ${ip || 'desconocida'} · ${new Date().toLocaleString('es-DO')}</p>
+      <p style="background:#fff3cd;padding:12px;border-radius:8px;color:#856404;font-size:0.9rem">
+        ⚠️ Si NO fuiste tú, contacta soporte y resetea tu contraseña inmediatamente.
+      </p>
+    `),
+    text: `Tu contrasena en ${config.appName} fue cambiada. Si no fuiste tu, resetea tu contrasena.`,
+  });
+}
+
 export async function sendPasswordResetEmail(toEmail, token) {
   const url = `${config.appUrl}/#/reset-password?token=${encodeURIComponent(token)}`;
   return send({

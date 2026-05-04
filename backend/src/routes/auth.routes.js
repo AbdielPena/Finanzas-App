@@ -11,7 +11,10 @@ import { query, getClient } from '../config/db.js';
 import { config } from '../config/env.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { authRequired } from '../middleware/auth.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email.service.js';
+import {
+  sendVerificationEmail, sendPasswordResetEmail,
+  sendWelcomeEmail, sendPasswordChangedEmail,
+} from '../services/email.service.js';
 
 const router = Router();
 
@@ -121,6 +124,12 @@ router.post('/register', strictAuthLimit, async (req, res, next) => {
       const accessToken = signAccessToken(user, workspace.id);
       const refreshToken = generateRefreshToken();
       await persistRefreshToken(user.id, refreshToken, req);
+
+      // Email de bienvenida (fire-and-forget, no bloquea la respuesta)
+      sendWelcomeEmail(user.email, {
+        nombre: user.nombre,
+        workspaceNombre: workspace.nombre,
+      }).catch((e) => console.warn('[welcome-email]', e.message));
 
       res.status(201).json({
         user: {
@@ -349,6 +358,17 @@ router.post('/reset-password', async (req, res, next) => {
     await query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [row.id]);
     // Revoca todas las sesiones activas
     await query('UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [row.user_id]);
+
+    // Email de confirmacion del cambio
+    try {
+      const userR = await query('SELECT email, nombre FROM users WHERE id = $1', [row.user_id]);
+      if (userR.rowCount > 0) {
+        sendPasswordChangedEmail(userR.rows[0].email, {
+          nombre: userR.rows[0].nombre,
+          ip: req.ip,
+        }).catch(() => {});
+      }
+    } catch {}
 
     res.json({ ok: true, message: 'Password restablecido' });
   } catch (e) {
