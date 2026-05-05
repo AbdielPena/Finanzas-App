@@ -11,19 +11,18 @@ function loadParticlesJs() {
   if (typeof window === 'undefined') return Promise.resolve(null);
   if (window.particlesJS) return Promise.resolve(window.particlesJS);
   if (scriptLoading) return scriptLoading;
+  // particles.js es UMD legacy — el import npm no siempre setea el global.
+  // CDN directo es más confiable y se cachea bien.
   scriptLoading = new Promise((resolve, reject) => {
-    // Lazy import del paquete npm — ya está bundleado por Vite
-    import('particles.js')
-      .then(() => resolve(window.particlesJS))
-      .catch((e) => {
-        // Fallback CDN si el bundle falla
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js';
-        s.async = true;
-        s.onload = () => resolve(window.particlesJS);
-        s.onerror = () => reject(e);
-        document.body.appendChild(s);
-      });
+    const existing = document.querySelector('script[data-particles-lib]');
+    if (existing && window.particlesJS) return resolve(window.particlesJS);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js';
+    s.async = true;
+    s.dataset.particlesLib = '1';
+    s.onload = () => resolve(window.particlesJS);
+    s.onerror = (e) => reject(new Error('particles.js CDN load failed'));
+    document.head.appendChild(s);
   });
   return scriptLoading;
 }

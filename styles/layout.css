@@ -113,15 +113,14 @@
 [data-theme="light"] .app-particles {
   opacity: 0.45;            /* algo mas sutil en modo claro */
 }
-/* Asegura que sidebar, header, contenido queden por encima del fondo */
-.app-shell > .sidebar,
-.app-shell > .app-main,
-.app-shell > .header,
-.app-shell > .bottom-nav,
-.app-shell > .mobile-overlay {
-  position: relative;
-  z-index: 1;
-}
+/* Sidebar / main / header / overlay deben quedar por ENCIMA del fondo de
+   partículas. Solo subimos el z-index — no tocamos `position` porque la
+   sidebar es `fixed` (cambiarla rompe el layout). */
+.app-shell > .sidebar { z-index: 2; }
+.app-shell > .app-main { z-index: 1; }
+.app-shell > .bottom-nav { z-index: 50; }
+.app-shell > .mobile-overlay { z-index: 99; }
+/* Header está dentro de app-main, no es hijo directo de app-shell */
 
 .sidebar-section {
   margin-bottom: 14px;
