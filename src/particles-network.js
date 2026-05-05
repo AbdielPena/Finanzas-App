@@ -87,14 +87,16 @@ export async function mountParticlesNetwork(containerId, opts = {}) {
       move: { enable: true, speed: 1.2, random: true, out_mode: 'bounce' },
     },
     interactivity: {
-      detect_on: 'canvas',
+      // 'window' = escucha eventos a nivel global, así reacciona al mouse
+      // aunque el canvas tenga pointer-events: none (no roba clicks de la UI).
+      detect_on: 'window',
       events: {
         onhover: { enable: true, mode: 'grab' },
         onclick: { enable: false },
         resize: true,
       },
       modes: {
-        grab: { distance: 200, line_linked: { opacity: 0.7 } },
+        grab: { distance: 220, line_linked: { opacity: 0.85 } },
       },
     },
     retina_detect: true,

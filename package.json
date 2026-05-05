@@ -1,6 +1,6 @@
 {
   "name": "finanzapp",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "description": "Aplicación de finanzas personales — multiplataforma (web + desktop + mobile)",
   "type": "module",
   "scripts": {
