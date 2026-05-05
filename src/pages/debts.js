@@ -8,11 +8,12 @@ import { generateId, formatMoney, formatDate, getToday, percentage, aiBadge } fr
 import { openModal, closeModal, showToast, confirmDialog, emptyState } from '../components.js';
 import { getCategoryOptions } from '../categories.js';
 import { enforceLimit } from '../plans_engine.js';
-import { 
-  calculateAmortization, 
+import {
+  calculateAmortization,
   executeLoanPayment,
-  getLoanCommitmentsTotal 
+  getLoanCommitmentsTotal
 } from '../loans_engine.js';
+import { bankFieldHtml, wireBankField, readBankField } from '../banks-rd.js';
 
 // ── Helpers
 function getAccountOptions() {
@@ -144,10 +145,14 @@ function loanForm(loan = null) {
         <label class="form-label">Concepto del Préstamo <span class="required">*</span></label>
         <input type="text" class="form-input" id="loan-nombre" value="${loan?.nombre || ''}" required placeholder="Ej: Financiamiento Tesla, Hipotecario..." />
       </div>
-      <div class="form-group">
-        <label class="form-label">Entidad / Persona <span class="required">*</span></label>
-        <input type="text" class="form-input" id="loan-entidad" value="${loan?.entidad || ''}" required placeholder="Ej: Tesla Inc, Banco Popular..." />
-      </div>
+      ${bankFieldHtml({
+        selectId: 'loan-entidad-select',
+        otherInputId: 'loan-entidad-other',
+        label: 'Entidad / Persona prestamista',
+        selectedBankId: loan?.entidadId || (loan?.entidad ? 'otro' : ''),
+        customName: loan?.entidadId === 'otro' ? loan?.entidad : (loan && !loan?.entidadId ? loan.entidad : ''),
+        required: true,
+      })}
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Monto Principal <span class="required">*</span></label>
@@ -629,10 +634,16 @@ export default function renderDebts() {
 
   function openLoanModal(loan = null) {
     const modal = openModal(loan ? 'Editar Préstamo' : 'Nuevo Préstamo', loanForm(loan));
+    wireBankField(modal);
     if (loan?.cuentaId) modal.querySelector('#loan-account').value = `account:${loan.cuentaId}`;
 
     modal.querySelector('#loan-form').addEventListener('submit', (e) => {
       e.preventDefault();
+      const { bankId, bankName } = readBankField(modal, 'loan-entidad-select', 'loan-entidad-other');
+      if (!bankName) {
+        showToast('error', 'Selecciona una entidad o escribe el nombre');
+        return;
+      }
       const principal = parseFloat(modal.querySelector('#loan-principal').value);
       const rate = parseFloat(modal.querySelector('#loan-rate').value);
       const pmt = parseFloat(modal.querySelector('#loan-pmt').value);
@@ -646,7 +657,8 @@ export default function renderDebts() {
         const data = {
           id: loan?.id || generateId(),
           nombre: modal.querySelector('#loan-nombre').value.trim(),
-          entidad: modal.querySelector('#loan-entidad').value.trim(),
+          entidad: bankName,
+          entidadId: bankId,
           montoPrincipal: principal,
           tasaAnual: rate,
           cuotasTotales: calc.schedule.length,

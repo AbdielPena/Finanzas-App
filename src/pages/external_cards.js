@@ -7,6 +7,7 @@ import { generateId, formatMoney, percentage, formatDate } from '../utils.js';
 import { openModal, closeModal, showToast, confirmDialog, emptyState } from '../components.js';
 import { getAssistantWidgetHTML } from '../credit_assistant.js';
 import { enforceLimit } from '../plans_engine.js';
+import { bankFieldHtml, wireBankField, readBankField } from '../banks-rd.js';
 
 function cardForm(card = null) {
   return `
@@ -15,16 +16,18 @@ function cardForm(card = null) {
         <label class="form-label">Nombre o Alias de Tarjeta <span class="required">*</span></label>
         <input type="text" class="form-input" id="ecc-name" value="${card?.nombre || ''}" placeholder="Ej: Visa Azul, Amex..." required />
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Titular / Propietario <span class="required">*</span></label>
-          <input type="text" class="form-input" id="ecc-owner" value="${card?.titular || ''}" placeholder="Ej: Esposa, Pedro..." required />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Banco <span class="required">*</span></label>
-          <input type="text" class="form-input" id="ecc-bank" value="${card?.banco || ''}" placeholder="Ej: BHD, Popular..." required />
-        </div>
+      <div class="form-group">
+        <label class="form-label">Titular / Propietario <span class="required">*</span></label>
+        <input type="text" class="form-input" id="ecc-owner" value="${card?.titular || ''}" placeholder="Ej: Esposa, Pedro..." required />
       </div>
+      ${bankFieldHtml({
+        selectId: 'ecc-bank-select',
+        otherInputId: 'ecc-bank-other',
+        label: 'Banco / Entidad emisora',
+        selectedBankId: card?.bancoId || (card?.banco ? 'otro' : ''),
+        customName: card?.bancoId === 'otro' ? card?.banco : (card && !card?.bancoId ? card.banco : ''),
+        required: true,
+      })}
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Límite de Crédito <span class="required">*</span></label>
@@ -216,13 +219,20 @@ export default function renderExternalCards() {
 
   function openCardModal(card = null) {
     const modal = openModal(card ? 'Editar Tarjeta Externa' : 'Nueva Tarjeta Externa', cardForm(card));
-    
+    wireBankField(modal);
+
     modal.querySelector('#ext-card-form').addEventListener('submit', (e) => {
       e.preventDefault();
+      const { bankId, bankName } = readBankField(modal, 'ecc-bank-select', 'ecc-bank-other');
+      if (!bankName) {
+        showToast('error', 'Selecciona o escribe el banco');
+        return;
+      }
       const data = {
         nombre: modal.querySelector('#ecc-name').value.trim(),
         titular: modal.querySelector('#ecc-owner').value.trim(),
-        banco: modal.querySelector('#ecc-bank').value.trim(),
+        banco: bankName,
+        bancoId: bankId,
         limiteCredito: parseFloat(modal.querySelector('#ecc-limit').value) || 0,
         saldoUsado: parseFloat(modal.querySelector('#ecc-used').value) || 0,
         tasaInteres: parseFloat(modal.querySelector('#ecc-rate').value) || null,
