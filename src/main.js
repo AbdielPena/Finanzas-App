@@ -556,33 +556,22 @@ function showApp() {
     });
   });
 
-  // Particles background del shell autenticado
-  // (se monta una vez, se re-monta al cambiar tema para tomar nuevos colores)
+  // Red de partículas del shell autenticado (estilo network)
+  // Se re-monta al cambiar tema para tomar la paleta nueva.
   let destroyShellParticles = null;
   const mountShellParticles = async (themeMode) => {
     const container = document.getElementById('app-particles');
     if (!container) return;
     try { destroyShellParticles?.(); } catch {}
     destroyShellParticles = null;
-    // No corremos el efecto si el usuario lo desactivo en settings
     if (store.getSetting('disableParticlesBg') === true) return;
     try {
-      const mod = await import('./particle-waves.js');
-      // Paleta segun tema
-      const isLight = themeMode === 'light';
-      const params = {
-        density: window.innerWidth < 600 ? 22 : 38,
-        speed: 0.04, // mas suave que en login (no debe distraer)
-        amplitude: 45,
-        separation: 120,
-        particleColor: isLight ? '#3b82f6' : '#6c63ff', // azul fintech / purple
-      };
-      destroyShellParticles = mod.mountParticleWaves(container, params);
+      const mod = await import('./particles-network.js');
+      destroyShellParticles = await mod.mountParticlesNetwork('app-particles', { theme: themeMode });
     } catch (e) {
       console.warn('[shell-particles] init fallo:', e?.message || e);
     }
   };
-  // Mount inicial
   mountShellParticles(document.documentElement.getAttribute('data-theme') || 'dark');
 
   // Theme toggle (header)
