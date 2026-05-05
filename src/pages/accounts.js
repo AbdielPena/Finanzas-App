@@ -8,16 +8,21 @@ import { openModal, closeModal, showToast, confirmDialog, emptyState } from '../
 import { calcAccountBalance } from '../balance_engine.js';
 import { enforceLimit } from '../plans_engine.js';
 import { openTransactionHistory } from '../transaction_history.js';
+import { bankFieldHtml, wireBankField, readBankField } from '../banks-rd.js';
 
 const BANK_COLORS = ['#6c63ff','#00d4aa','#42a5f5','#ff7043','#ab47bc','#26a69a','#ec407a','#ffa726','#5c6bc0','#8d6e63'];
 
 function bankForm(bank = null) {
   return `
     <form id="bank-form">
-      <div class="form-group">
-        <label class="form-label">Nombre del Banco <span class="required">*</span></label>
-        <input type="text" class="form-input" id="bank-name" value="${bank?.nombre || ''}" placeholder="Ej: Banreservas, Popular..." required />
-      </div>
+      ${bankFieldHtml({
+        selectId: 'bank-rd-select',
+        otherInputId: 'bank-rd-other',
+        label: 'Banco / Entidad',
+        selectedBankId: bank?.bankId || (bank?.nombre ? 'otro' : ''),
+        customName: bank?.bankId === 'otro' ? bank?.nombre : (bank && !bank?.bankId ? bank.nombre : ''),
+        required: true,
+      })}
       <div class="form-group">
         <label class="form-label">Color</label>
         <div class="color-picker-group" id="bank-color-picker">
@@ -372,7 +377,10 @@ export default function renderAccounts() {
 
   function openBankModal(bank = null) {
     const modal = openModal(bank ? 'Editar Institución' : 'Nueva Institución', bankForm(bank));
-    
+
+    // Wire dropdown bancos RD (muestra/oculta el input "otro")
+    wireBankField(modal);
+
     // Handle Colors
     modal.querySelectorAll('.color-option').forEach(opt => {
       opt.addEventListener('click', () => {
@@ -387,20 +395,25 @@ export default function renderAccounts() {
     form.onsubmit = (e) => {
       e.preventDefault();
       if (submitBtn.disabled) return;
+
+      const { bankId, bankName } = readBankField(modal, 'bank-rd-select', 'bank-rd-other');
+      if (!bankName) {
+        showToast('error', 'Selecciona un banco o escribe el nombre');
+        return;
+      }
       submitBtn.disabled = true;
       submitBtn.innerHTML = 'Guardando...';
 
       setTimeout(() => {
         try {
-          const nombre = modal.querySelector('#bank-name').value.trim();
           const selected = modal.querySelector('.color-option.selected');
           const color = selected ? selected.dataset.color : BANK_COLORS[0];
-          
+
           if (bank) {
-            store.update('banks', bank.id, { nombre, color });
+            store.update('banks', bank.id, { nombre: bankName, bankId, color });
             showToast('success', 'Datos guardados correctamente');
           } else {
-            store.add('banks', { id: generateId(), nombre, color, icono: '' });
+            store.add('banks', { id: generateId(), nombre: bankName, bankId, color, icono: '' });
             showToast('success', 'Institución creada');
           }
           closeModal();

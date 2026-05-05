@@ -264,6 +264,9 @@ export const admin = {
   users(search)         { return request('GET', '/admin/users', { query: { search } }); },
   setUserStatus(id, estado) { return request('PATCH', `/admin/users/${id}/status`, { body: { estado } }); },
   terminateSessions(id) { return request('POST', `/admin/users/${id}/terminate-sessions`); },
+  forceResetPassword(id, newPassword, requireChange = true) {
+    return request('POST', `/admin/users/${id}/force-reset-password`, { body: { newPassword, requireChange } });
+  },
   auditLogs(limit)      { return request('GET', '/admin/audit-logs', { query: { limit } }); },
   plans()               { return request('GET', '/admin/plans'); },
   createPlan(data)      { return request('POST', '/admin/plans', { body: data }); },

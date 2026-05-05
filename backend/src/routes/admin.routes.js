@@ -64,6 +64,42 @@ router.patch('/users/:id/status', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---------- POST /admin/users/:id/force-reset-password ----------
+router.post('/users/:id/force-reset-password', async (req, res, next) => {
+  try {
+    const { newPassword, requireChange } = req.body || {};
+    if (!newPassword || newPassword.length < 6) {
+      throw new HttpError(400, 'La contrasena debe tener al menos 6 caracteres');
+    }
+    const argonMod = await import('argon2');
+    const argon2 = argonMod.default || argonMod;
+    const hash = await argon2.hash(newPassword, { type: argon2.argon2id });
+
+    const r = await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, nombre`,
+      [hash, req.params.id]
+    );
+    if (r.rowCount === 0) throw new HttpError(404, 'Usuario no encontrado');
+
+    // Si requireChange fue solicitado, revoca todas las sesiones del usuario.
+    // (esto lo fuerza a hacer login con la nueva contrasena de inmediato)
+    if (requireChange !== false) {
+      await query(
+        `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+        [req.params.id]
+      );
+    }
+
+    await query(
+      `INSERT INTO audit_logs (actor_user_id, accion, target_type, target_id, metadata, ip)
+       VALUES ($1, 'force_reset_password', 'user', $2, $3, $4)`,
+      [req.user.id, req.params.id, JSON.stringify({ requireChange: requireChange !== false }), req.ip]
+    );
+
+    res.json({ ok: true, data: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
 // ---------- POST /admin/users/:id/terminate-sessions ----------
 router.post('/users/:id/terminate-sessions', async (req, res, next) => {
   try {

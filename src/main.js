@@ -266,7 +266,7 @@ function showApp() {
               </button>
               <button class="nav-item" data-route="/tithe">
                 ${icon('tithe', 20)}
-                <span class="nav-item-label">Cálculo del ${store.getSetting('tithe_percentage', 10)}%</span>
+                <span class="nav-item-label">Cálculo de ingresos por porcentaje</span>
               </button>
               <button class="nav-item" data-route="/notes">
                 ${icon('fileText', 20)}

@@ -116,7 +116,7 @@ class Router {
       '/payables': ['Cuentas por Pagar', 'Pagos pendientes'],
       '/external_cards': ['Tarjetas Terceros', 'Tarjetas externas que gestionas'],
       '/goals': ['Metas Financieras', 'Objetivos de ahorro'],
-      '/tithe': ['Cálculo del 10%', 'Gestión del diezmo'],
+      '/tithe': ['Cálculo de ingresos por porcentaje', 'Configura tu porcentaje de ahorro/diezmo'],
       '/notifications': ['Notificaciones', 'Centro de alertas'],
       '/categories': ['Categorías', 'Categorías personalizadas'],
       '/settings': ['Configuración', 'Preferencias de la aplicación'],

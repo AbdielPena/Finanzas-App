@@ -58,8 +58,8 @@ export default function renderTithe() {
     page.innerHTML = `
       <div class="page-header">
         <div class="page-header-left">
-          <h1>Cálculo del ${tithePercent}% (Base Neta)</h1>
-          <p>Supervisa tus ingresos, aplica excepciones y calcula tu separación</p>
+          <h1>Cálculo de ingresos por porcentaje</h1>
+          <p>Aplica el ${tithePercent}% sobre tu base neta — supervisa ingresos, excepciones y la cantidad a apartar</p>
         </div>
         <div class="page-header-actions">
           <div style="display:flex;align-items:center;gap:8px;background:var(--bg-card);padding:8px 14px;border-radius:10px;border:1px solid var(--border)">
