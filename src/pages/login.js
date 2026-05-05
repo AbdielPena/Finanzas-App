@@ -5,7 +5,6 @@ import {
   hasAnyUsers, loginUser, registerUser, selectWorkspace,
   ROLES, hasLegacyData, finishForcedPasswordChange
 } from '../auth.js';
-import { mountParticleWaves } from '../particle-waves.js';
 
 const AVATARS = ['😊','🦁','🐼','🦊','🐸','🤖','🧑‍💻','👩‍💼','🧙','🦄'];
 
@@ -13,64 +12,16 @@ export function renderLogin(onSuccess) {
   const el = document.createElement('div');
   el.id = 'login-root';
   el.style.cssText = `
-    position: relative;
     min-height:100vh; display:flex; align-items:center; justify-content:center;
-    background: var(--bg-body);
+    background: radial-gradient(ellipse at 20% 50%, rgba(99,102,241,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.1) 0%, transparent 50%),
+                var(--bg-body);
     padding: 20px;
-    overflow: hidden;
   `;
-
-  // Capa de partículas Three.js detrás del contenido
-  const fxLayer = document.createElement('div');
-  fxLayer.id = 'login-fx';
-  fxLayer.style.cssText = 'position:absolute;inset:0;z-index:0;pointer-events:none';
-  el.appendChild(fxLayer);
-
-  // Overlay sutil para que la card resalte sin perder el efecto
-  const overlay = document.createElement('div');
-  overlay.style.cssText = `
-    position:absolute;inset:0;z-index:1;pointer-events:none;
-    background:
-      radial-gradient(ellipse at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 80%),
-      radial-gradient(ellipse at 20% 50%, rgba(99,102,241,0.10) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.08) 0%, transparent 50%);
-  `;
-  el.appendChild(overlay);
-
-  // Inicia el efecto y guarda el destroyer para cleanup
-  let destroyParticles = null;
-  // Defer hasta que el contenedor esté en el DOM (evita size 0)
-  requestAnimationFrame(() => {
-    try {
-      destroyParticles = mountParticleWaves(fxLayer, {
-        density: window.innerWidth < 600 ? 28 : 45,
-        speed: 0.06,
-        amplitude: 60,
-        separation: 110,
-        particleColor: '#6c63ff',
-      });
-    } catch (e) {
-      console.warn('[login] particles fx no se pudo iniciar:', e?.message || e);
-    }
-  });
-
-  // Cleanup cuando el nodo se quita del DOM
-  const observer = new MutationObserver(() => {
-    if (!document.body.contains(el)) {
-      try { destroyParticles?.(); } catch {}
-      observer.disconnect();
-    }
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
 
   function showScreen(screen) {
-    // Mantén las capas de fondo, solo limpia el contenido encima
-    [...el.querySelectorAll(':scope > .login-screen')].forEach((n) => n.remove());
-    const node = screen();
-    node.classList.add('login-screen');
-    node.style.position = 'relative';
-    node.style.zIndex = '2';
-    el.appendChild(node);
+    el.innerHTML = '';
+    el.appendChild(screen());
   }
 
   // ── Login Screen

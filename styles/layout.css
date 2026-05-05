@@ -95,6 +95,30 @@
 .sidebar-nav::-webkit-scrollbar { width: 6px; }
 .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
 
+/* Fondo animado de partículas del shell autenticado */
+.app-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.18;            /* sutil, solo ambiente */
+  mix-blend-mode: screen;   /* mejor integracion con el bg */
+  transition: opacity 0.4s ease;
+}
+[data-theme="light"] .app-particles {
+  opacity: 0.12;            /* aun mas sutil en modo claro */
+  mix-blend-mode: multiply; /* en claro multiply mantiene contraste */
+}
+/* Asegura que sidebar, header, contenido queden por encima del fondo */
+.app-shell > .sidebar,
+.app-shell > .app-main,
+.app-shell > .header,
+.app-shell > .bottom-nav,
+.app-shell > .mobile-overlay {
+  position: relative;
+  z-index: 1;
+}
+
 .sidebar-section {
   margin-bottom: 14px;
 }

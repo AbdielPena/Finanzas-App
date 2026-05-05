@@ -178,6 +178,8 @@ function showApp() {
 
   app.innerHTML = `
     <div class="app-shell" id="app-shell">
+      <!-- Fondo animado de partículas (Three.js) - detrás de TODO -->
+      <div class="app-particles" id="app-particles" aria-hidden="true"></div>
       <!-- Mobile overlay -->
       <div class="mobile-overlay" id="mobile-overlay"></div>
 
@@ -554,6 +556,35 @@ function showApp() {
     });
   });
 
+  // Particles background del shell autenticado
+  // (se monta una vez, se re-monta al cambiar tema para tomar nuevos colores)
+  let destroyShellParticles = null;
+  const mountShellParticles = async (themeMode) => {
+    const container = document.getElementById('app-particles');
+    if (!container) return;
+    try { destroyShellParticles?.(); } catch {}
+    destroyShellParticles = null;
+    // No corremos el efecto si el usuario lo desactivo en settings
+    if (store.getSetting('disableParticlesBg') === true) return;
+    try {
+      const mod = await import('./particle-waves.js');
+      // Paleta segun tema
+      const isLight = themeMode === 'light';
+      const params = {
+        density: window.innerWidth < 600 ? 22 : 38,
+        speed: 0.04, // mas suave que en login (no debe distraer)
+        amplitude: 45,
+        separation: 120,
+        particleColor: isLight ? '#3b82f6' : '#6c63ff', // azul fintech / purple
+      };
+      destroyShellParticles = mod.mountParticleWaves(container, params);
+    } catch (e) {
+      console.warn('[shell-particles] init fallo:', e?.message || e);
+    }
+  };
+  // Mount inicial
+  mountShellParticles(document.documentElement.getAttribute('data-theme') || 'dark');
+
   // Theme toggle (header)
   const applyTheme = (mode) => {
     document.documentElement.setAttribute('data-theme', mode);
@@ -564,6 +595,8 @@ function showApp() {
     document.querySelectorAll('.theme-mode-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.mode === mode);
     });
+    // Re-mount particles con la nueva paleta
+    mountShellParticles(mode);
   };
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
