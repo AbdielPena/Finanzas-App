@@ -917,11 +917,12 @@ export default function renderDebts() {
       </div>
 
       ${pend > 0 ? `
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-          <button id="grp-pay-all" class="btn btn-primary btn-sm">${icon('check', 14)} Pagar todo lo adeudado</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button id="grp-pay-all" class="btn btn-primary btn-sm">${icon('check', 14)} Pagar ${pendientesCount} ${pendientesCount === 1 ? 'registro pendiente' : 'registros pendientes'} (${formatMoney(pend)})</button>
           <button id="grp-pay-count" class="btn btn-secondary btn-sm">${icon('check', 14)} Pagar N registros</button>
           <button id="grp-pay-amount" class="btn btn-secondary btn-sm">${icon('dollarSign', 14)} Abono parcial</button>
         </div>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 16px">Solo se descuentan registros con saldo &gt; 0. Los que ya estan en estado 'pagada' no se debitan de nuevo.</p>
       ` : ''}
 
       <div class="table-container">
