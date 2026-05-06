@@ -76,7 +76,15 @@ function deepSnakeize(obj) {
   if (obj && typeof obj === 'object' && obj.constructor === Object) {
     const out = {};
     for (const [k, v] of Object.entries(obj)) {
-      out[camelToSnake(k)] = deepSnakeize(v);
+      const snakeKey = camelToSnake(k);
+      let value = deepSnakeize(v);
+      // Postgres UUID columns NO aceptan "" como valor — solo UUID o NULL.
+      // Cualquier *_id que llegue como string vacío lo convertimos a null
+      // para evitar el error 22P02 que silenciosamente rompía los INSERT.
+      if (value === '' && /(^|_)id$/i.test(snakeKey)) {
+        value = null;
+      }
+      out[snakeKey] = value;
     }
     return out;
   }

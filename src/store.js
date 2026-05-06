@@ -187,12 +187,36 @@ class Store {
         const resource = api[RESOURCES[collection]];
         if (!resource) continue;
         try {
-          if (op === 'create') await resource.create(data);
-          else if (op === 'update') await resource.update(data.id, data);
-          else if (op === 'remove') await resource.remove(data.id);
+          let result;
+          if (op === 'create')      result = await resource.create(data);
+          else if (op === 'update') result = await resource.update(data.id, data);
+          else if (op === 'remove') result = await resource.remove(data.id);
+
+          // Si el backend asignó su propio id en un create, reemplazamos el id
+          // local (que puede haber sido generado client-side) por el real.
+          // Así el siguiente bootstrap no genera un duplicado.
+          if (op === 'create' && result?.data?.id && result.data.id !== data.id) {
+            const items = this._cache[collection] || [];
+            const idx = items.findIndex(it => it.id === data.id);
+            if (idx !== -1) {
+              items[idx] = { ...items[idx], ...result.data };
+              this._cache[collection] = [...items];
+              this._persistLocal(collection, items);
+              this._notify(collection);
+            }
+          }
         } catch (err) {
-          console.warn(`[store] write fallido ${op} ${collection}:`, err.message);
-          // En produccion: reintento con backoff o snackbar al user
+          // Antes era un console.warn silencioso. Ahora avisamos al usuario
+          // para que sepa que sus cambios no llegaron al servidor.
+          console.error(`[store] write fallido ${op} ${collection}:`, err);
+          try {
+            const { showToast } = await import('./components.js');
+            showToast(
+              'error',
+              'No se pudo guardar en el servidor',
+              `${op} ${collection}: ${err?.message || 'error desconocido'}. Recarga la pagina para sincronizar.`
+            );
+          } catch {}
         }
       }
     } finally {

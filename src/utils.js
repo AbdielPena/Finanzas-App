@@ -3,8 +3,24 @@
 // ============================================
 
 // ---------- ID Generation ----------
+// UUID v4 - el backend tiene columnas UUID y rechaza ids viejos estilo
+// Date.now()+random (que generaban "mos3bcesgtzmzvu8b" y rompían los INSERT
+// con error pg "22P02 invalid input syntax for type uuid").
 export function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback para entornos sin crypto.randomUUID (tests viejos, etc.)
+  // Genera un UUID v4 manualmente.
+  const hex = '0123456789abcdef';
+  let out = '';
+  for (let i = 0; i < 36; i++) {
+    if (i === 8 || i === 13 || i === 18 || i === 23) out += '-';
+    else if (i === 14) out += '4';
+    else if (i === 19) out += hex[(Math.random() * 4) | 8];
+    else out += hex[(Math.random() * 16) | 0];
+  }
+  return out;
 }
 
 // ---------- Currency Formatting ----------
