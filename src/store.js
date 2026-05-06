@@ -80,18 +80,89 @@ class Store {
       collections.map(col => api[RESOURCES[col]].list({ limit: 200 }))
     );
 
+    // ---------- AUTO-RECOVERY ----------
+    // Si localStorage tiene items que el backend no conoce, los empujamos
+    // al backend antes de aceptar su lista como verdad. Esto recupera
+    // automaticamente las transacciones que se perdieron por el bug del
+    // string vacio en columnas UUID (corregido en api-client.js).
+    const recoveryQueue = [];
+
     collections.forEach((col, i) => {
       const r = results[i];
-      if (r.status === 'fulfilled') {
-        this._cache[col] = r.value.data || [];
-      } else {
+      const backendList = (r.status === 'fulfilled' && r.value.data) ? r.value.data : [];
+
+      // Items del cache local antes del bootstrap (de la sesion anterior)
+      let localList = [];
+      try {
+        const raw = localStorage.getItem(`${getPrefix()}${col}`);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) localList = parsed.filter(it => it && typeof it === 'object');
+      } catch {}
+
+      // Si el bootstrap fallo, mantener localStorage como fallback
+      if (r.status !== 'fulfilled') {
         console.warn(`[store] Falla cargando ${col}:`, r.reason?.message);
-        this._cache[col] = [];
+        this._cache[col] = localList;
+        return;
       }
+
+      // Detectar items locales NO presentes en backend (orfanos)
+      // Solo recuperamos si el resource API existe (entidades de negocio)
+      if (RESOURCES[col] && api[RESOURCES[col]] && localList.length > backendList.length) {
+        const backendIds = new Set(backendList.map(b => b.id));
+        const orphans = localList.filter(l => l.id && !backendIds.has(l.id));
+        if (orphans.length > 0) {
+          console.log(`[store] auto-recovery: ${orphans.length} ${col} pendientes de sincronizar`);
+          orphans.forEach(orphan => recoveryQueue.push({ collection: col, item: orphan }));
+        }
+      }
+
+      // El backend siempre gana en datos que SÍ tiene
+      this._cache[col] = backendList;
     });
 
     this._bootstrapped = true;
     this._notify('*');
+
+    // Procesar recovery en background
+    if (recoveryQueue.length > 0) {
+      this._runRecovery(recoveryQueue);
+    }
+  }
+
+  async _runRecovery(queue) {
+    let recovered = 0;
+    let failed = 0;
+    for (const { collection, item } of queue) {
+      try {
+        const resource = api[RESOURCES[collection]];
+        const result = await resource.create(item);
+        if (result?.data) {
+          // Agregar al cache con el id real del backend
+          const items = this._cache[collection] || [];
+          this._cache[collection] = [...items, result.data];
+          this._persistLocal(collection, this._cache[collection]);
+          recovered++;
+        }
+      } catch (e) {
+        console.warn(`[store] no se pudo recuperar ${collection}/${item.id}:`, e.message);
+        failed++;
+      }
+    }
+    this._notify('*');
+    if (recovered > 0 || failed > 0) {
+      try {
+        const { showToast } = await import('./components.js');
+        if (recovered > 0) {
+          showToast('success', `${recovered} registro${recovered !== 1 ? 's' : ''} recuperado${recovered !== 1 ? 's' : ''}`,
+            'Datos pendientes que no se habían guardado se sincronizaron al servidor.');
+        }
+        if (failed > 0) {
+          showToast('warning', `${failed} registro${failed !== 1 ? 's' : ''} no se pudo${failed !== 1 ? 'eron' : ''} recuperar`,
+            'Revisa la consola para más detalles.');
+        }
+      } catch {}
+    }
   }
 
   // ============================================
