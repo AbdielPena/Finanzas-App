@@ -318,6 +318,95 @@ export default function renderDebts() {
     const active = debts.filter(d => d.estado !== 'pagada');
     const totalPendiente = active.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
 
+    // ---------- Agrupar por templateId ----------
+    // Las deudas que vienen de la misma plantilla se renderizan en un solo
+    // card; las "sueltas" (sin plantilla) se ven una por una como antes.
+    const groups = new Map(); // templateId -> { tpl, debts: [] }
+    const standalone = [];
+    debts.forEach((d) => {
+      const tplId = d.templateId || d.metadata?.templateId;
+      if (tplId) {
+        if (!groups.has(tplId)) groups.set(tplId, { tplId, debts: [] });
+        groups.get(tplId).debts.push(d);
+      } else {
+        standalone.push(d);
+      }
+    });
+
+    const groupCardHtml = (g) => {
+      const tpl = store.getById('debt_templates', g.tplId);
+      const nombre = tpl?.nombre || g.debts[0]?.descripcion || 'Plantilla';
+      const acreedor = tpl?.acreedor || g.debts[0]?.acreedor || '';
+      const total   = g.debts.reduce((s, d) => s + (parseFloat(d.montoTotal) || parseFloat(d.montoOriginal) || 0), 0);
+      const pagado  = g.debts.reduce((s, d) => s + (parseFloat(d.montoPagado) || 0), 0);
+      const pend    = g.debts.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
+      const progress = total > 0 ? Math.round((pagado / total) * 100) : 0;
+      const allPaid = g.debts.every(d => d.estado === 'pagada');
+      return `
+        <div class="card" data-tpl-group="${g.tplId}" style="cursor:pointer; margin-bottom:16px; border-left:4px solid ${allPaid ? 'var(--color-success)' : 'var(--accent-primary)'}; transition: transform 0.15s">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start">
+            <div style="flex:1">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+                <span style="font-weight:700; font-size:1.05rem">${escapeHtml(nombre)}</span>
+                <span class="badge badge-info">${g.debts.length} ${g.debts.length === 1 ? 'registro' : 'registros'}</span>
+                ${allPaid ? '<span class="badge badge-success">Pagada</span>' : ''}
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Acreedor: <strong>${escapeHtml(acreedor)}</strong></div>
+
+              <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px">
+                <span>Pagado: ${formatMoney(pagado)} de ${formatMoney(total)}</span>
+                <span>${progress}%</span>
+              </div>
+              <div class="progress-bar" style="height:6px"><div class="progress-fill ${allPaid ? 'income' : 'expense'}" style="width:${progress}%"></div></div>
+              <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:6px">
+                Pendiente: <strong style="color:var(--color-expense)">${formatMoney(pend)}</strong>
+              </div>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:4px">
+              ${icon('arrowRight', 14)} Ver detalles
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const debtCardHtml = (d) => {
+      const isPaid = d.estado === 'pagada';
+      const isOverdue = d.fechaVencimiento && d.fechaVencimiento < today && !isPaid;
+      const progress = (d.montoTotal || 0) > 0 ? Math.round((d.montoPagado / d.montoTotal) * 100) : 0;
+      return `
+        <div class="card" style="margin-bottom:16px; opacity:${isPaid ? '0.7' : '1'}; border-left:4px solid ${isPaid ? 'var(--color-success)' : isOverdue ? 'var(--color-expense)' : 'var(--accent-primary)'}">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start">
+            <div style="flex:1">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+                <span style="font-weight:700; font-size:1.05rem">${escapeHtml(d.descripcion || '')}</span>
+                <span class="badge ${isPaid ? 'badge-success' : isOverdue ? 'badge-danger' : 'badge-warning'}">
+                  ${isPaid ? 'Pagada' : isOverdue ? 'Vencida' : 'Pendiente'}
+                </span>
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Acreedor: <strong>${escapeHtml(d.acreedor || '')}</strong></div>
+
+              <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px">
+                <span>Avance: ${formatMoney(d.montoPagado)} pagado</span>
+                <span>${progress}%</span>
+              </div>
+              <div class="progress-bar" style="height:6px"><div class="progress-fill ${isPaid ? 'income' : 'expense'}" style="width:${progress}%"></div></div>
+              <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:6px">
+                Pendiente: <strong style="color:var(--color-expense)">${formatMoney(d.saldoPendiente)}</strong>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px">
+              <div style="display:flex; gap:6px">
+                <button class="btn-icon" data-edit-debt="${d.id}">${icon('edit', 16)}</button>
+                <button class="btn-icon" data-del-debt="${d.id}">${icon('trash', 16)}</button>
+              </div>
+              ${!isPaid ? `<button class="btn btn-secondary btn-sm" data-pay-debt="${d.id}">${icon('check', 14)} Pagar</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
     return `
       <div style="background:rgba(239,68,68,0.05); padding:16px; border-radius:12px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; border:1px solid rgba(239,68,68,0.1)">
         <div>
@@ -326,46 +415,16 @@ export default function renderDebts() {
         </div>
         <div style="font-size:1.8rem; filter:grayscale(1)">💸</div>
       </div>
-      
+
       <div class="stagger-children">
-        ${debts.map(d => {
-          const isPaid = d.estado === 'pagada';
-          const isOverdue = d.fechaVencimiento && d.fechaVencimiento < today && !isPaid;
-          const progress = d.montoTotal > 0 ? Math.round((d.montoPagado / d.montoTotal) * 100) : 0;
-          return `
-            <div class="card" style="margin-bottom:16px; opacity:${isPaid ? '0.7' : '1'}; border-left:4px solid ${isPaid ? 'var(--color-success)' : isOverdue ? 'var(--color-expense)' : 'var(--accent-primary)'}">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start">
-                <div style="flex:1">
-                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
-                    <span style="font-weight:700; font-size:1.05rem">${d.descripcion}</span>
-                    <span class="badge ${isPaid ? 'badge-success' : isOverdue ? 'badge-danger' : 'badge-warning'}">
-                      ${isPaid ? 'Pagada' : isOverdue ? 'Vencida' : 'Pendiente'}
-                    </span>
-                  </div>
-                  <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Acreedor: <strong>${d.acreedor}</strong></div>
-                  
-                  <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px">
-                    <span>Avance: ${formatMoney(d.montoPagado)} pagado</span>
-                    <span>${progress}%</span>
-                  </div>
-                  <div class="progress-bar" style="height:6px"><div class="progress-fill ${isPaid ? 'income' : 'expense'}" style="width:${progress}%"></div></div>
-                  <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:6px">
-                    Pendiente: <strong style="color:var(--color-expense)">${formatMoney(d.saldoPendiente)}</strong>
-                  </div>
-                </div>
-                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px">
-                  <div style="display:flex; gap:6px">
-                    <button class="btn-icon" data-edit-debt="${d.id}">${icon('edit', 16)}</button>
-                    <button class="btn-icon" data-del-debt="${d.id}">${icon('trash', 16)}</button>
-                  </div>
-                  ${!isPaid ? `<button class="btn btn-secondary btn-sm" data-pay-debt="${d.id}">${icon('check', 14)} Pagar</button>` : ''}
-                </div>
-              </div>
-            </div>
-          `;
-        }).join('')}
+        ${[...groups.values()].map(groupCardHtml).join('')}
+        ${standalone.map(debtCardHtml).join('')}
       </div>
     `;
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   }
 
   function renderTemplatesTab(tpls) {
@@ -508,6 +567,15 @@ export default function renderDebts() {
     page.querySelector('#add-tpl-btn')?.addEventListener('click', () => openTplModal());
     page.querySelector('#add-loan-btn')?.addEventListener('click', () => openLoanModal());
 
+    // Click en card agrupado por plantilla -> ver detalle
+    page.querySelectorAll('[data-tpl-group]').forEach(card => {
+      card.addEventListener('click', (e) => {
+        // No abrir el modal si el click fue sobre un boton interno
+        if (e.target.closest('button')) return;
+        openTemplateDebtsDetail(card.dataset.tplGroup);
+      });
+    });
+
     // Empty state buttons
     page.querySelector('#empty-add-debt-btn')?.addEventListener('click', () => openDebtModal());
     page.querySelector('#empty-add-tpl-btn')?.addEventListener('click', () => openTplModal());
@@ -588,18 +656,24 @@ export default function renderDebts() {
       if (source.startsWith('account:')) accountId = source.split(':')[1];
       else if (source.startsWith('card:')) cardId = source.split(':')[1];
 
+      // Forma extendida — la api-client la mapea a las columnas reales del
+      // backend (montoOriginal, fechaProximoPago, metadata) automaticamente.
       const data = {
-        id: debt?.id || generateId(),
         descripcion: modal.querySelector('#debt-desc').value.trim(),
         acreedor: modal.querySelector('#debt-acreedor').value.trim(),
-        montoTotal: total,
+        montoOriginal: total,
+        montoTotal: total, // alias para retrocompat
         saldoPendiente: debt ? (debt.saldoPendiente || total) : total,
         montoPagado: debt ? (debt.montoPagado || 0) : 0,
-        fechaVencimiento: modal.querySelector('#debt-due').value,
+        fechaProximoPago: modal.querySelector('#debt-due').value || null,
+        fechaVencimiento: modal.querySelector('#debt-due').value || null,
         cuentaId: accountId,
         tarjetaId: cardId,
         notas: modal.querySelector('#debt-notes').value.trim(),
-        estado: debt?.estado || 'pendiente'
+        // estado debe coincidir con valores que el backend acepta (default 'activa')
+        estado: debt?.estado || 'activa',
+        // mantener templateId si se edita una deuda generada desde plantilla
+        templateId: debt?.templateId || debt?.metadata?.templateId || null,
       };
       if (debt) { store.update('debts', debt.id, data); showToast('success', 'Deuda actualizada'); }
       else {
@@ -757,17 +831,91 @@ export default function renderDebts() {
     modal.querySelector('.btn-cancel')?.addEventListener('click', closeModal);
   }
 
+  function openTemplateDebtsDetail(tplId) {
+    const tpl = store.getById('debt_templates', tplId);
+    const all = store.getAll('debts').map(normDebt);
+    const debts = all.filter(d => (d.templateId || d.metadata?.templateId) === tplId);
+    if (debts.length === 0) { showToast('warning', 'Sin deudas para esta plantilla'); return; }
+
+    const total = debts.reduce((s, d) => s + (parseFloat(d.montoTotal) || 0), 0);
+    const pagado = debts.reduce((s, d) => s + (parseFloat(d.montoPagado) || 0), 0);
+    const pend = debts.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
+    const today = getToday();
+
+    const rows = debts.map(d => {
+      const isPaid = d.estado === 'pagada';
+      const isOverdue = d.fechaVencimiento && d.fechaVencimiento < today && !isPaid;
+      return `
+        <tr>
+          <td style="font-size:0.82rem">${formatDate(d.fechaVencimiento || d.createdAt || '')}</td>
+          <td style="font-size:0.82rem">${escapeHtml(d.descripcion || '')}</td>
+          <td class="right" style="font-size:0.82rem">${formatMoney(d.montoTotal)}</td>
+          <td class="right" style="font-size:0.82rem;color:var(--color-income)">${formatMoney(d.montoPagado)}</td>
+          <td class="right" style="font-size:0.82rem;color:var(--color-expense)">${formatMoney(d.saldoPendiente)}</td>
+          <td><span class="badge ${isPaid ? 'badge-success' : isOverdue ? 'badge-danger' : 'badge-warning'}">${isPaid ? 'Pagada' : isOverdue ? 'Vencida' : 'Pendiente'}</span></td>
+          <td>
+            <div style="display:flex;gap:4px;justify-content:flex-end">
+              ${!isPaid ? `<button class="btn-icon" data-tpl-pay="${d.id}" title="Pagar">${icon('check', 14)}</button>` : ''}
+              <button class="btn-icon" data-tpl-edit="${d.id}" title="Editar">${icon('edit', 14)}</button>
+              <button class="btn-icon" data-tpl-del="${d.id}" title="Eliminar">${icon('trash', 14)}</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const modal = openModal(tpl?.nombre || 'Detalle plantilla', `
+      <div style="margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div><div style="font-size:0.7rem;color:var(--text-muted)">Registros</div><div style="font-weight:700;font-size:1.05rem">${debts.length}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--text-muted)">Total</div><div style="font-weight:700;font-size:1.05rem">${formatMoney(total)}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--text-muted)">Pagado</div><div style="font-weight:700;font-size:1.05rem;color:var(--color-income)">${formatMoney(pagado)}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--text-muted)">Pendiente</div><div style="font-weight:700;font-size:1.05rem;color:var(--color-expense)">${formatMoney(pend)}</div></div>
+        </div>
+      </div>
+      <div class="table-container">
+        <table class="data-table" style="font-size:0.85rem">
+          <thead><tr><th>Fecha</th><th>Descripción</th><th class="right">Total</th><th class="right">Pagado</th><th class="right">Pendiente</th><th>Estado</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `, { width: '780px' });
+
+    modal.querySelectorAll('[data-tpl-edit]').forEach(b => b.addEventListener('click', () => {
+      const d = store.getById('debts', b.dataset.tplEdit);
+      if (d) { closeModal(); openDebtModal(normDebt(d)); }
+    }));
+    modal.querySelectorAll('[data-tpl-del]').forEach(b => b.addEventListener('click', async () => {
+      if (await confirmDialog('¿Eliminar esta deuda?', 'Solo elimina este registro, no la plantilla.')) {
+        store.remove('debts', b.dataset.tplDel);
+        showToast('success', 'Deuda eliminada');
+        closeModal();
+        render();
+      }
+    }));
+    modal.querySelectorAll('[data-tpl-pay]').forEach(b => b.addEventListener('click', () => {
+      const d = store.getById('debts', b.dataset.tplPay);
+      if (d) { closeModal(); openPayModal(normDebt(d)); }
+    }));
+  }
+
   function createDebtFromTemplate(tpl) {
-    const total = tpl.monto * tpl.cantidadVeces;
+    // Cada vez que el usuario clica "Usar" sobre una plantilla, registramos
+    // UNA deuda con monto = tpl.monto. La plantilla solo es la metadata
+    // que las agrupa en el tab "Activas".
+    const monto = parseFloat(tpl.monto) || 0;
     const data = {
-      id: generateId(),
       descripcion: tpl.nombre,
       acreedor: tpl.acreedor,
-      montoTotal: total,
-      saldoPendiente: total,
+      montoOriginal: monto,
+      montoTotal: monto,
+      saldoPendiente: monto,
       montoPagado: 0,
+      fechaProximoPago: getToday(),
       fechaVencimiento: getToday(),
-      estado: 'pendiente'
+      estado: 'activa',
+      templateId: tpl.id,
+      templateNombre: tpl.nombre,
     };
     store.add('debts', data);
     showToast('success', '🤖 Deuda generada desde plantilla');

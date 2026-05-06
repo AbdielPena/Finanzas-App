@@ -221,14 +221,101 @@ export const workspaces = {
 };
 
 // ---------- Resource factory ----------
-function resource(path) {
+// Algunas tablas (debts, debt_templates) tienen un esquema mas estrecho
+// que lo que la app necesita. Usamos columnas JSONB como "bolsa" para
+// los campos extra y aplicamos un mapeo automatico in/out aqui para que
+// el resto del codigo trabaje con la forma extendida.
+function resource(path, opts = {}) {
+  const { transformIn, transformOut } = opts;
+  const tIn = (data) => {
+    if (!data) return data;
+    if (Array.isArray(data)) return data.map(tIn);
+    return transformIn ? transformIn(data) : data;
+  };
+  const tOut = (data) => {
+    if (!data) return data;
+    return transformOut ? transformOut(data) : data;
+  };
+  const wrap = (p) => p.then(r => {
+    if (r?.data) {
+      r.data = tIn(r.data);
+    }
+    return r;
+  });
   return {
-    list(query)         { return request('GET', `/${path}`, { query }); },
-    get(id)             { return request('GET', `/${path}/${id}`); },
-    create(data)        { return request('POST', `/${path}`, { body: data }); },
-    update(id, data)    { return request('PATCH', `/${path}/${id}`, { body: data }); },
+    list(query)         { return wrap(request('GET', `/${path}`, { query })); },
+    get(id)             { return wrap(request('GET', `/${path}/${id}`)); },
+    create(data)        { return wrap(request('POST', `/${path}`, { body: tOut(data) })); },
+    update(id, data)    { return wrap(request('PATCH', `/${path}/${id}`, { body: tOut(data) })); },
     remove(id)          { return request('DELETE', `/${path}/${id}`); },
   };
+}
+
+// ---------- Transformers para tablas con esquema "bolsa" ----------
+// debts: el backend solo guarda acreedor / monto_original / saldo_pendiente /
+// fecha_proximo_pago / etc. + metadata JSONB. La app usa descripcion,
+// montoTotal, fechaVencimiento, cuentaId, tarjetaId, etc. Empacamos los
+// extras en metadata al escribir y los desempacamos al leer.
+const DEBT_NATIVE = new Set([
+  'id', 'workspaceId', 'acreedor', 'montoOriginal', 'saldoPendiente',
+  'cuotasTotal', 'cuotasPagadas', 'montoCuota', 'tasaInteres',
+  'fechaInicio', 'fechaProximoPago', 'estado', 'metadata',
+  'createdAt', 'updatedAt',
+]);
+
+function debtTransformOut(d) {
+  if (!d) return d;
+  const out = {};
+  const meta = { ...(d.metadata || {}) };
+  for (const [k, v] of Object.entries(d)) {
+    if (DEBT_NATIVE.has(k)) {
+      out[k] = v;
+    } else {
+      meta[k] = v;
+    }
+  }
+  // Aliases comunes -> nombre canonico
+  if (out.montoOriginal == null && d.montoTotal != null) out.montoOriginal = d.montoTotal;
+  if (out.fechaProximoPago == null && d.fechaVencimiento != null) out.fechaProximoPago = d.fechaVencimiento;
+  if (out.saldoPendiente == null && d.saldoPendiente != null) out.saldoPendiente = d.saldoPendiente;
+  out.metadata = meta;
+  return out;
+}
+
+function debtTransformIn(d) {
+  if (!d) return d;
+  const meta = d.metadata || {};
+  // Re-exponer metadata como propiedades de primer nivel para que las
+  // 30+ referencias del display sigan funcionando (debt.descripcion,
+  // debt.montoTotal, debt.fechaVencimiento, etc.)
+  return {
+    ...meta,
+    ...d,
+    montoTotal: d.montoTotal ?? d.montoOriginal ?? meta.montoTotal,
+    fechaVencimiento: d.fechaVencimiento ?? meta.fechaVencimiento ?? d.fechaProximoPago,
+    descripcion: d.descripcion ?? meta.descripcion ?? d.acreedor,
+    notas: d.notas ?? meta.notas,
+    cuentaId: d.cuentaId ?? meta.cuentaId,
+    tarjetaId: d.tarjetaId ?? meta.tarjetaId,
+    montoPagado: d.montoPagado ?? meta.montoPagado ?? 0,
+    templateId: d.templateId ?? meta.templateId,
+  };
+}
+
+// debt_templates: backend guarda nombre + configuracion JSONB. La app usa
+// nombre, acreedor, monto, cantidadVeces, frecuencia, etc.
+function tplTransformOut(d) {
+  if (!d) return d;
+  const { id, nombre, configuracion, ...rest } = d;
+  return {
+    id, nombre,
+    configuracion: { ...(configuracion || {}), ...rest },
+  };
+}
+function tplTransformIn(d) {
+  if (!d) return d;
+  const cfg = d.configuracion || {};
+  return { ...cfg, ...d };
 }
 
 // ---------- Entidades de negocio ----------
@@ -241,9 +328,9 @@ export const beneficiaries    = resource('beneficiaries');
 export const transactions     = resource('transactions');
 export const subscriptions    = resource('subscriptions');
 export const subscriptionCharges = resource('subscription-charges');
-export const debts            = resource('debts');
+export const debts            = resource('debts', { transformIn: debtTransformIn, transformOut: debtTransformOut });
 export const debtPayments     = resource('debt-payments');
-export const debtTemplates    = resource('debt-templates');
+export const debtTemplates    = resource('debt-templates', { transformIn: tplTransformIn, transformOut: tplTransformOut });
 export const loans            = resource('loans');
 export const loanPayments     = resource('loan-payments');
 export const receivables      = resource('receivables');
