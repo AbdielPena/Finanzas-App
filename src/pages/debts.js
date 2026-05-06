@@ -318,38 +318,67 @@ export default function renderDebts() {
     const active = debts.filter(d => d.estado !== 'pagada');
     const totalPendiente = active.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
 
-    // ---------- Agrupar por templateId ----------
-    // Las deudas que vienen de la misma plantilla se renderizan en un solo
-    // card; las "sueltas" (sin plantilla) se ven una por una como antes.
-    const groups = new Map(); // templateId -> { tpl, debts: [] }
+    // ---------- Agrupar por plantilla / persona / concepto ----------
+    // Llave de agrupacion (en orden de prioridad):
+    //   1. templateId - identificador estable de la plantilla
+    //   2. concepto+acreedor - misma descripcion + mismo acreedor
+    // Esto cubre tambien deudas legacy sin templateId, y deudas creadas
+    // con plantillas duplicadas (mismo nombre, distinto UUID por bugs viejos).
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const groupKey = (d) => {
+      const tplId = d.templateId || d.metadata?.templateId;
+      if (tplId) return `tpl:${tplId}`;
+      const desc = norm(d.descripcion);
+      const acr = norm(d.acreedor);
+      // Si tiene descripcion Y acreedor, agrupa por la combinacion
+      if (desc && acr) return `da:${desc}|${acr}`;
+      // Si solo tiene descripcion sin acreedor, NO agrupa (cada deuda standalone)
+      return null;
+    };
+
+    const groups = new Map(); // groupKey -> { key, tplId|null, debts: [] }
     const standalone = [];
     debts.forEach((d) => {
-      const tplId = d.templateId || d.metadata?.templateId;
-      if (tplId) {
-        if (!groups.has(tplId)) groups.set(tplId, { tplId, debts: [] });
-        groups.get(tplId).debts.push(d);
-      } else {
-        standalone.push(d);
+      const key = groupKey(d);
+      if (!key) { standalone.push(d); return; }
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          tplId: d.templateId || d.metadata?.templateId || null,
+          debts: [],
+        });
       }
+      groups.get(key).debts.push(d);
     });
 
+    // Si un grupo tiene una sola deuda, la tratamos como standalone
+    // (no tiene sentido un card "agrupado" con 1 registro).
+    for (const [key, g] of [...groups.entries()]) {
+      if (g.debts.length < 2) {
+        standalone.push(...g.debts);
+        groups.delete(key);
+      }
+    }
+
     const groupCardHtml = (g) => {
-      const tpl = store.getById('debt_templates', g.tplId);
-      const nombre = tpl?.nombre || g.debts[0]?.descripcion || 'Plantilla';
+      const tpl = g.tplId ? store.getById('debt_templates', g.tplId) : null;
+      const nombre = tpl?.nombre || g.debts[0]?.descripcion || 'Grupo de deudas';
       const acreedor = tpl?.acreedor || g.debts[0]?.acreedor || '';
       const total   = g.debts.reduce((s, d) => s + (parseFloat(d.montoTotal) || parseFloat(d.montoOriginal) || 0), 0);
       const pagado  = g.debts.reduce((s, d) => s + (parseFloat(d.montoPagado) || 0), 0);
       const pend    = g.debts.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
       const progress = total > 0 ? Math.round((pagado / total) * 100) : 0;
       const allPaid = g.debts.every(d => d.estado === 'pagada');
+      const sourceLabel = tpl ? 'Plantilla' : 'Agrupada por nombre + acreedor';
       return `
-        <div class="card" data-tpl-group="${g.tplId}" style="cursor:pointer; margin-bottom:16px; border-left:4px solid ${allPaid ? 'var(--color-success)' : 'var(--accent-primary)'}; transition: transform 0.15s">
+        <div class="card" data-debt-group="${escapeAttr(g.key)}" style="cursor:pointer; margin-bottom:16px; border-left:4px solid ${allPaid ? 'var(--color-success)' : 'var(--accent-primary)'}; transition: transform 0.15s">
           <div style="display:flex; justify-content:space-between; align-items:flex-start">
             <div style="flex:1">
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;flex-wrap:wrap">
                 <span style="font-weight:700; font-size:1.05rem">${escapeHtml(nombre)}</span>
-                <span class="badge badge-info">${g.debts.length} ${g.debts.length === 1 ? 'registro' : 'registros'}</span>
+                <span class="badge badge-info">${g.debts.length} registros</span>
                 ${allPaid ? '<span class="badge badge-success">Pagada</span>' : ''}
+                <span style="font-size:0.65rem;color:var(--text-muted)">· ${sourceLabel}</span>
               </div>
               <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Acreedor: <strong>${escapeHtml(acreedor)}</strong></div>
 
@@ -426,6 +455,7 @@ export default function renderDebts() {
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   }
+  function escapeAttr(s) { return escapeHtml(s); }
 
   function renderTemplatesTab(tpls) {
     if (tpls.length === 0) {
@@ -567,12 +597,11 @@ export default function renderDebts() {
     page.querySelector('#add-tpl-btn')?.addEventListener('click', () => openTplModal());
     page.querySelector('#add-loan-btn')?.addEventListener('click', () => openLoanModal());
 
-    // Click en card agrupado por plantilla -> ver detalle
-    page.querySelectorAll('[data-tpl-group]').forEach(card => {
+    // Click en card agrupado -> ver detalle
+    page.querySelectorAll('[data-debt-group]').forEach(card => {
       card.addEventListener('click', (e) => {
-        // No abrir el modal si el click fue sobre un boton interno
         if (e.target.closest('button')) return;
-        openTemplateDebtsDetail(card.dataset.tplGroup);
+        openDebtsGroupDetail(card.dataset.debtGroup);
       });
     });
 
@@ -831,11 +860,23 @@ export default function renderDebts() {
     modal.querySelector('.btn-cancel')?.addEventListener('click', closeModal);
   }
 
-  function openTemplateDebtsDetail(tplId) {
-    const tpl = store.getById('debt_templates', tplId);
+  function openDebtsGroupDetail(groupKey) {
     const all = store.getAll('debts').map(normDebt);
-    const debts = all.filter(d => (d.templateId || d.metadata?.templateId) === tplId);
-    if (debts.length === 0) { showToast('warning', 'Sin deudas para esta plantilla'); return; }
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    let debts = [];
+    let tpl = null;
+    let title = 'Detalle';
+    if (groupKey.startsWith('tpl:')) {
+      const tplId = groupKey.slice(4);
+      tpl = store.getById('debt_templates', tplId);
+      debts = all.filter(d => (d.templateId || d.metadata?.templateId) === tplId);
+      title = tpl?.nombre || 'Detalle plantilla';
+    } else if (groupKey.startsWith('da:')) {
+      const [desc, acr] = groupKey.slice(3).split('|');
+      debts = all.filter(d => norm(d.descripcion) === desc && norm(d.acreedor) === acr);
+      title = debts[0]?.descripcion || 'Detalle';
+    }
+    if (debts.length === 0) { showToast('warning', 'Sin deudas en este grupo'); return; }
 
     const total = debts.reduce((s, d) => s + (parseFloat(d.montoTotal) || 0), 0);
     const pagado = debts.reduce((s, d) => s + (parseFloat(d.montoPagado) || 0), 0);
@@ -864,7 +905,7 @@ export default function renderDebts() {
       `;
     }).join('');
 
-    const modal = openModal(tpl?.nombre || 'Detalle plantilla', `
+    const modal = openModal(title, `
       <div style="margin-bottom:16px">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
           <div><div style="font-size:0.7rem;color:var(--text-muted)">Registros</div><div style="font-weight:700;font-size:1.05rem">${debts.length}</div></div>
