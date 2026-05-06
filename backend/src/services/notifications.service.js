@@ -30,6 +30,58 @@ async function logDispatch({ user_id, workspace_id, channel, tipo, titulo, body,
   }
 }
 
+// ---------- Cooldown: cuántas horas debe esperar antes de re-enviar
+// la MISMA alerta (mismo user+channel+tipo+referencia_id).
+// El user puede sobrescribir estos defaults via prefs.notification_cooldowns
+// (JSONB) en una version futura.
+const COOLDOWN_HOURS = {
+  // por nivel
+  critical: 24,
+  warning: 48,
+  info: 48,
+  // override por tipo si se necesita
+  card: 48,
+  payment: 24,
+  subscription: 24,
+  debt: 48,
+  receivable: 48,
+};
+
+function cooldownHoursFor(tipo, level) {
+  // tipo gana sobre level si esta definido
+  return COOLDOWN_HOURS[tipo] ?? COOLDOWN_HOURS[level] ?? 48;
+}
+
+/**
+ * Devuelve true si ya se envió esta misma alerta dentro de la ventana de
+ * cooldown (mismo user, mismo channel, mismo tipo y misma referencia_id).
+ * Solo cuenta envíos exitosos (status='sent') para no bloquear reintentos
+ * tras un fallo.
+ */
+async function isInCooldown(user_id, channel, tipo, referencia_id, hours) {
+  if (!user_id || !referencia_id) return false;
+  try {
+    const r = await query(
+      `SELECT 1 FROM notification_log
+       WHERE user_id = $1
+         AND channel = $2
+         AND tipo = $3
+         AND status = 'sent'
+         AND metadata->>'referencia_id' = $4
+         AND created_at >= NOW() - ($5 || ' hours')::interval
+       LIMIT 1`,
+      [user_id, channel, tipo, referencia_id, String(hours)]
+    );
+    return r.rowCount > 0;
+  } catch (e) {
+    // Si la tabla todavía no existe (migration pendiente), deja pasar el
+    // envío para no bloquear todo. El logDispatch tampoco va a guardar nada
+    // hasta que se aplique la migration.
+    console.warn('[cooldown] no se pudo consultar log (puede faltar migracion):', e.message);
+    return false;
+  }
+}
+
 async function getUserPreferences(userId) {
   const r = await query('SELECT * FROM notification_preferences WHERE user_id = $1', [userId]);
   if (r.rowCount > 0) return r.rows[0];
@@ -84,34 +136,47 @@ export async function notify({ workspace_id, user_id, tipo, titulo, mensaje, lev
     };
     if (tipo in tipoMap && !tipoMap[tipo]) return created;
 
+    const refId = metadata?.referencia_id || null;
+    const cooldownH = cooldownHoursFor(tipo, level);
+
     // Email
     if (prefs.email_enabled && (level === 'critical' || level === 'warning')) {
-      const userR = await query('SELECT email, nombre FROM users WHERE id = $1', [user_id]);
-      if (userR.rowCount > 0) {
-        try {
-          await sendNotificationEmail(userR.rows[0].email, { titulo, mensaje });
-          await logDispatch({ user_id, workspace_id, channel: 'email', tipo, titulo, body: mensaje });
-        } catch (e) {
-          await logDispatch({ user_id, workspace_id, channel: 'email', tipo, titulo, body: mensaje, status: 'failed', error: e.message });
+      const inCooldown = await isInCooldown(user_id, 'email', tipo, refId, cooldownH);
+      if (inCooldown) {
+        await logDispatch({ user_id, workspace_id, channel: 'email', tipo, titulo, body: mensaje, status: 'skipped', error: `cooldown ${cooldownH}h activo`, metadata });
+      } else {
+        const userR = await query('SELECT email, nombre FROM users WHERE id = $1', [user_id]);
+        if (userR.rowCount > 0) {
+          try {
+            await sendNotificationEmail(userR.rows[0].email, { titulo, mensaje });
+            await logDispatch({ user_id, workspace_id, channel: 'email', tipo, titulo, body: mensaje, metadata });
+          } catch (e) {
+            await logDispatch({ user_id, workspace_id, channel: 'email', tipo, titulo, body: mensaje, status: 'failed', error: e.message, metadata });
+          }
         }
       }
     }
 
     // Push notification via FCM (si esta configurado)
     if (prefs.push_enabled && prefs.push_token) {
-      try {
-        const r = await sendPushTo(prefs.push_token, {
-          title: titulo,
-          body: mensaje,
-          data: { tipo, ...(metadata || {}) },
-        });
-        if (r.sent) {
-          await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje });
-        } else if (r.error) {
-          await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'failed', error: r.error });
+      const inCooldown = await isInCooldown(user_id, 'push', tipo, refId, cooldownH);
+      if (inCooldown) {
+        await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'skipped', error: `cooldown ${cooldownH}h activo`, metadata });
+      } else {
+        try {
+          const r = await sendPushTo(prefs.push_token, {
+            title: titulo,
+            body: mensaje,
+            data: { tipo, ...(metadata || {}) },
+          });
+          if (r.sent) {
+            await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, metadata });
+          } else if (r.error) {
+            await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'failed', error: r.error, metadata });
+          }
+        } catch (e) {
+          await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'failed', error: e.message, metadata });
         }
-      } catch (e) {
-        await logDispatch({ user_id, workspace_id, channel: 'push', tipo, titulo, body: mensaje, status: 'failed', error: e.message });
       }
     }
   } catch (e) {
