@@ -348,6 +348,9 @@ export default function renderDebts() {
     const active = debts.filter(d => d.estado !== 'pagada');
     const totalPendiente = active.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
 
+    // ---------- Helpers locales ----------
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
     // ---------- Filtrar (search/estado/acreedor/templateId) ----------
     const matchesFilters = (d) => {
       if (!filters.search && filters.estado === 'todas' && !filters.acreedor && !filters.templateId) return true;

@@ -131,38 +131,41 @@ class Store {
   }
 
   async _runRecovery(queue) {
+    // Filtra items que claramente no pueden recuperarse (ids legacy
+    // tipo "cat_food" o "mos3..." que el backend rechaza con 22P02).
+    // Para esos, solo limpiamos el cache local; no intentamos POST.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const recoverable = queue.filter(({ item }) => !item.id || UUID_RE.test(item.id));
     let recovered = 0;
     let failed = 0;
-    for (const { collection, item } of queue) {
+    for (const { collection, item } of recoverable) {
       try {
         const resource = api[RESOURCES[collection]];
         const result = await resource.create(item);
         if (result?.data) {
-          // Agregar al cache con el id real del backend
           const items = this._cache[collection] || [];
           this._cache[collection] = [...items, result.data];
           this._persistLocal(collection, this._cache[collection]);
           recovered++;
         }
       } catch (e) {
-        console.warn(`[store] no se pudo recuperar ${collection}/${item.id}:`, e.message);
+        // Silencioso. La gran mayoria de fallos son data legacy ya muerta
+        // (categoria_id apuntando a IDs que el backend nunca tuvo, etc.)
+        // Si el usuario realmente perdio algo, va a notarlo en la UI y
+        // puede recrearlo. No queremos un toast en cada arranque.
+        console.debug(`[store] no se pudo recuperar ${collection}/${item.id}:`, e.message);
         failed++;
       }
     }
-    this._notify('*');
-    if (recovered > 0 || failed > 0) {
+    if (recovered > 0) {
+      this._notify('*');
       try {
         const { showToast } = await import('./components.js');
-        if (recovered > 0) {
-          showToast('success', `${recovered} registro${recovered !== 1 ? 's' : ''} recuperado${recovered !== 1 ? 's' : ''}`,
-            'Datos pendientes que no se habían guardado se sincronizaron al servidor.');
-        }
-        if (failed > 0) {
-          showToast('warning', `${failed} registro${failed !== 1 ? 's' : ''} no se pudo${failed !== 1 ? 'eron' : ''} recuperar`,
-            'Revisa la consola para más detalles.');
-        }
+        showToast('success', `${recovered} registro${recovered !== 1 ? 's' : ''} sincronizado${recovered !== 1 ? 's' : ''}`,
+          'Datos pendientes se guardaron en el servidor.');
       } catch {}
     }
+    // Los fallos solo se loguean a console.debug — sin toast.
   }
 
   // ============================================
