@@ -28,7 +28,7 @@ function catForm(cat = null) {
       <div class="form-group">
         <label class="form-label">Icono</label>
         <div class="color-picker-group" id="cat-emoji-picker" style="gap:4px">
-          ${CAT_EMOJIS.map(e => `<div class="color-option ${cat?.icono === e ? 'selected' : ''}" data-emoji="${e}" style="background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:1.1rem;border-radius:6px;width:36px;height:36px">${e}</div>`).join('')}
+          ${CAT_EMOJIS.map(e => `<div class="color-option ${(cat?.emoji || cat?.icono) === e ? 'selected' : ''}" data-emoji="${e}" style="background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:1.1rem;border-radius:6px;width:36px;height:36px">${e}</div>`).join('')}
         </div>
       </div>
       <div class="form-group">
@@ -92,8 +92,8 @@ export default function renderCategories() {
         <div style="display:flex;flex-wrap:wrap;gap:10px">
           ${cats.map(c => `
             <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg-input);border-radius:var(--radius-sm);border:1px solid var(--border-color)">
-              <span style="font-size:1.2rem">${c.icono}</span>
-              <span style="font-size:0.85rem;font-weight:500">${c.nombre}</span>
+              <span style="font-size:1.2rem">${c.emoji || c.icono || ''}</span>
+              <span style="font-size:0.85rem;font-weight:500">${c.nombre || ''}</span>
               <span style="width:10px;height:10px;border-radius:50%;background:${c.color}"></span>
               ${c.esSistema ? '<span class="badge badge-neutral" style="font-size:0.6rem">Sistema</span>' : `
                 <button class="btn-icon" data-edit-cat="${c.id}" style="width:24px;height:24px">${icon('edit', 12)}</button>
@@ -128,7 +128,7 @@ export default function renderCategories() {
       const data = {
         nombre: modal.querySelector('#cat-name').value.trim(),
         tipo: modal.querySelector('#cat-type').value,
-        icono: selectedEmoji?.dataset.emoji || '📦',
+        emoji: selectedEmoji?.dataset.emoji || '📦',
         color: selectedColor?.dataset.color || '#bdbdbd',
       };
       if (cat) { updateCategory(cat.id, data); showToast('success', 'Categoría actualizada'); }

@@ -523,7 +523,7 @@ export default function renderTransactions() {
             </div>
           </div>
         </td>
-        <td>${cat ? `<span class="badge badge-neutral">${cat.icono} ${cat.nombre}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${cat ? `<span class="badge badge-neutral">${(cat.emoji || cat.icono || '')} ${cat.nombre || ''}</span>`.trim() : '<span style="color:var(--text-muted)">—</span>'}</td>
         <td style="font-size:0.8rem;color:var(--text-secondary)">${isHold ? '<span style="color:#f59e0b">Sin cuenta \u23f3</span>' : card ? '\ud83d\udcb3 '+card.nombre : account?.nombre || '—'}</td>
         <td style="font-size:0.8rem;color:var(--text-secondary)">${formatDate(tx.fecha)}</td>
         <td class="right" style="font-weight:700;color:${isHold ? '#f59e0b' : isIncome ? 'var(--color-income)' : isTransfer ? 'inherit' : 'var(--color-expense)'}">
