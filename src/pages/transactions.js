@@ -327,9 +327,15 @@ export default function renderTransactions() {
       if (!tx) return;
       const ok = await confirmDialog('¿Eliminar transacción?', `"${tx.descripcion}" por ${formatMoney(tx.monto)}`);
       if (ok) {
-        if (tx.tarjetaId && tx.tipo === 'gasto') {
+        // Si la tx era un gasto en tarjeta y NO estaba en hold, devolvemos
+        // el monto al disponible reduciendo saldoUsado.
+        if (tx.tarjetaId && tx.tipo === 'gasto' && tx.estado !== 'hold') {
           const card = store.getById('cards', tx.tarjetaId);
-          if (card) store.update('cards', tx.tarjetaId, { saldoUsado: Math.max(0, (card.saldoUsado || 0) - (tx.monto || 0)) });
+          if (card) {
+            const prev = parseFloat(card.saldoUsado) || 0;
+            const decr = parseFloat(tx.monto) || 0;
+            store.update('cards', tx.tarjetaId, { saldoUsado: Math.max(0, prev - decr) });
+          }
         }
         store.remove('transactions', tx.id);
         showToast('success', 'Transacción eliminada');
@@ -343,10 +349,23 @@ export default function renderTransactions() {
         const txId = sel.dataset.txId;
         const val = sel.value;
         if (!val) return;
+        const tx = store.getById('transactions', txId);
         const updates = { estado: 'activo' };
         if (val.startsWith('acc:')) { updates.cuentaId = val.replace('acc:', ''); updates.tarjetaId = null; }
         else if (val.startsWith('card:')) { updates.tarjetaId = val.replace('card:', ''); updates.cuentaId = null; }
         store.update('transactions', txId, updates);
+
+        // Si paso de hold -> activo y se asigno a una tarjeta como gasto,
+        // sumar el monto al saldoUsado de la tarjeta.
+        if (updates.tarjetaId && tx && tx.tipo === 'gasto') {
+          const card = store.getById('cards', updates.tarjetaId);
+          if (card) {
+            const prev = parseFloat(card.saldoUsado) || 0;
+            const incr = parseFloat(tx.monto) || 0;
+            store.update('cards', updates.tarjetaId, { saldoUsado: prev + incr });
+          }
+        }
+
         showToast('success', '✅ Transacción asignada', 'Ya está contabilizada en tu balance');
         render();
       });
@@ -547,13 +566,25 @@ export default function renderTransactions() {
         const accountLabelText = tipo === 'ingreso' ? 'Cuenta Destino' : 'Cuenta Origen';
         const accountLabelRequired = tipo === 'transferencia' ? '' : ' <span class="required">*</span>';
         modal.querySelector('#tx-account-label').innerHTML = accountLabelText + accountLabelRequired;
+        // Cuando se cambia el tipo, re-evaluar si la cuenta sigue siendo requerida
+        // (la helper se define unas lineas mas abajo, asi que la llamamos defensivamente)
+        if (typeof syncAccountRequirement === 'function') syncAccountRequirement();
       });
     });
 
-    // If card is selected, make account optional
+    // Si hay tarjeta seleccionada, la cuenta deja de ser requerida (gasto va a tarjeta).
+    // Aplica tanto al cargar el form como cuando el usuario cambia el select.
     const cardSelect = modal.querySelector('#tx-card');
     const accSelect = modal.querySelector('#tx-account');
-    cardSelect?.addEventListener('change', () => { accSelect.required = !cardSelect.value; });
+    const syncAccountRequirement = () => {
+      const tipo = modal.querySelector('#tx-tipo').value;
+      const hasCard = Boolean(cardSelect?.value);
+      // Para transferencia la cuenta nunca es opcional, para los demas
+      // sigue siendo requerida salvo que se haya elegido una tarjeta.
+      accSelect.required = !(tipo === 'gasto' && hasCard) && tipo !== 'transferencia';
+    };
+    cardSelect?.addEventListener('change', syncAccountRequirement);
+    syncAccountRequirement(); // estado inicial, especialmente al editar tx existente
 
     // Income type chips logic
     modal.querySelectorAll('.income-type-chip').forEach(chip => {
@@ -699,6 +730,12 @@ export default function renderTransactions() {
           };
         });
 
+      // Regla: si el gasto va a tarjeta de credito, NO debe descontar de la cuenta.
+      // El saldo de la cuenta se afectara solo al pagar la tarjeta (ver cards.js).
+      const cuentaSeleccionada = modal.querySelector('#tx-account').value;
+      const tarjetaSeleccionada = modal.querySelector('#tx-card')?.value || '';
+      const usaTarjeta = tipo === 'gasto' && Boolean(tarjetaSeleccionada);
+
       const data = {
         tipo,
         monto,
@@ -706,8 +743,8 @@ export default function renderTransactions() {
         descripcion: modal.querySelector('#tx-desc').value.trim(),
         clienteAsociado: modal.querySelector('#tx-client')?.value.trim() || null,
         categoriaId: modal.querySelector('#tx-category').value,
-        cuentaId: modal.querySelector('#tx-account').value,
-        tarjetaId: modal.querySelector('#tx-card')?.value || '',
+        cuentaId: usaTarjeta ? '' : cuentaSeleccionada,
+        tarjetaId: tarjetaSeleccionada,
         cuentaDestinoId: modal.querySelector('#tx-dest')?.value || '',
         fecha: modal.querySelector('#tx-date').value,
         notas: modal.querySelector('#tx-notes').value.trim(),
@@ -719,11 +756,21 @@ export default function renderTransactions() {
       if (!data.cuentaId && !data.tarjetaId) { showToast('error', 'Selecciona una cuenta o tarjeta'); return; }
       if (tipo === 'transferencia' && !data.cuentaDestinoId) { showToast('error', 'Selecciona la cuenta destino'); return; }
 
+      // ---------- Recalcular saldo usado de tarjeta al editar / crear ----------
+      // Importante: saldoUsado puede venir como string desde el backend (pg numeric),
+      // por eso usamos parseFloat en toda operacion aritmetica para evitar
+      // concatenacion de strings.
+      const cardWasOnHold = (t) => t?.estado === 'hold';
+
       if (tx) {
-        // Revert old card balance
-        if (tx.tarjetaId && tx.tipo === 'gasto') {
+        // Revertir saldoUsado de la tarjeta vieja (si aplicaba)
+        if (tx.tarjetaId && tx.tipo === 'gasto' && !cardWasOnHold(tx)) {
           const oldCard = store.getById('cards', tx.tarjetaId);
-          if (oldCard) store.update('cards', tx.tarjetaId, { saldoUsado: Math.max(0, oldCard.saldoUsado - tx.monto) });
+          if (oldCard) {
+            const prev = parseFloat(oldCard.saldoUsado) || 0;
+            const decr = parseFloat(tx.monto) || 0;
+            store.update('cards', tx.tarjetaId, { saldoUsado: Math.max(0, prev - decr) });
+          }
         }
         store.update('transactions', tx.id, data);
       } else {
@@ -731,10 +778,14 @@ export default function renderTransactions() {
         store.add('transactions', { ...data, id: generateId() });
       }
 
-      // Update card balance for expense on card
-      if (data.tarjetaId && tipo === 'gasto') {
+      // Aplicar saldoUsado de la tarjeta nueva (solo si no es hold)
+      if (data.tarjetaId && tipo === 'gasto' && data.estado !== 'hold') {
         const card = store.getById('cards', data.tarjetaId);
-        if (card) store.update('cards', data.tarjetaId, { saldoUsado: (card.saldoUsado || 0) + monto });
+        if (card) {
+          const prev = parseFloat(card.saldoUsado) || 0;
+          const incr = parseFloat(monto) || 0;
+          store.update('cards', data.tarjetaId, { saldoUsado: prev + incr });
+        }
       }
 
       showToast('success', tx ? 'Transacción actualizada' : 'Transacción registrada');
