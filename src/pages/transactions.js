@@ -89,7 +89,7 @@ function txForm(tx = null) {
         <label class="form-label">Categoría</label>
         <select class="form-select" id="tx-category">
           <option value="">Seleccionar categoría</option>
-          ${getCategoryOptions(tipo)}
+          ${getCategoryOptions(tipo, tx?.categoriaId || '')}
         </select>
       </div>
       <div class="form-group" id="tx-account-group">
@@ -540,6 +540,25 @@ export default function renderTransactions() {
   function openTxModal(tx = null) {
     const modal = openModal(tx ? 'Editar Transacción' : 'Nueva Transacción', txForm(tx), { width: '560px' });
 
+    // Pre-llenar todos los campos via JS (mas robusto que el atributo HTML
+    // value/selected, que falla si el DOM se reordena o si los IDs llegan
+    // vacios). Solo aplica al editar (tx existe).
+    if (tx) {
+      const set = (sel, val) => { const el = modal.querySelector(sel); if (el != null && val != null) el.value = val; };
+      set('#tx-amount', tx.monto);
+      set('#tx-date', tx.fecha);
+      set('#tx-desc', tx.descripcion);
+      set('#tx-client', tx.clienteAsociado);
+      set('#tx-category', tx.categoriaId);
+      set('#tx-account', tx.cuentaId);
+      set('#tx-card', tx.tarjetaId);
+      set('#tx-dest', tx.cuentaDestinoId);
+      set('#tx-notes', tx.notas);
+      set('#tx-income-type', tx.tipoIngreso || 'personal');
+      const dz = modal.querySelector('#tx-diezmo');
+      if (dz) dz.checked = tx.aplicaDiezmo !== false;
+    }
+
     // Tab switching
     const tabs = modal.querySelectorAll('#tx-type-tabs .tab');
     tabs.forEach(tab => {
@@ -548,10 +567,10 @@ export default function renderTransactions() {
         tab.classList.add('active');
         const tipo = tab.dataset.tipo;
         modal.querySelector('#tx-tipo').value = tipo;
-        // Update category options
+        // Update category options - preservando seleccion previa
         const catSelect = modal.querySelector('#tx-category');
-        const currentCat = catSelect.value;
-        catSelect.innerHTML = `<option value="">Seleccionar categoría</option>${getCategoryOptions(tipo)}`;
+        const currentCat = catSelect.value || tx?.categoriaId || '';
+        catSelect.innerHTML = `<option value="">Seleccionar categoría</option>${getCategoryOptions(tipo, currentCat)}`;
         catSelect.value = currentCat;
         // Show/hide fields
         modal.querySelector('#tx-card-group').style.display = tipo === 'gasto' ? 'block' : 'none';

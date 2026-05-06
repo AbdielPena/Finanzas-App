@@ -100,10 +100,11 @@ export function categoryIcon(c) {
   return c?.emoji || c?.icono || '';
 }
 
-export function getCategoryOptions(tipo = null) {
+export function getCategoryOptions(tipo = null, selectedId = '') {
   return getCategories(tipo).map(c => {
     const icon = categoryIcon(c);
     const prefix = icon ? `${icon} ` : '';
-    return `<option value="${c.id}">${prefix}${c.nombre || ''}</option>`;
+    const sel = c.id === selectedId ? ' selected' : '';
+    return `<option value="${c.id}"${sel}>${prefix}${c.nombre || ''}</option>`;
   }).join('');
 }
