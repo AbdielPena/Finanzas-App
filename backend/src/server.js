@@ -17,6 +17,7 @@ import adminRoutes from './routes/admin.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import { mountEntities } from './routes/entities.routes.js';
 import { startScheduler } from './services/scheduler.service.js';
+import { runStartupMigrations } from './config/auto-migrate.js';
 
 const app = express();
 
@@ -74,15 +75,22 @@ app.use(errorHandler);
 
 // ---------- Bootstrap ----------
 const port = config.port;
-app.listen(port, () => {
-  console.log(`
+
+// Aplica migraciones .sql idempotentes (notification_log, notification_preferences,
+// etc.) antes de empezar a escuchar — así no se necesita SSH para parchar el schema.
+runStartupMigrations()
+  .catch((e) => console.warn('[auto-migrate] fallo en bootstrap:', e?.message))
+  .finally(() => {
+    app.listen(port, () => {
+      console.log(`
   ┌─────────────────────────────────────────────┐
   │  FinanzApp API                              │
   │  Env:    ${config.nodeEnv.padEnd(35)}│
   │  Port:   ${String(port).padEnd(35)}│
   │  Health: http://localhost:${port}/health         │
   └─────────────────────────────────────────────┘
-  `);
-});
+      `);
+    });
+  });
 
 export default app;
