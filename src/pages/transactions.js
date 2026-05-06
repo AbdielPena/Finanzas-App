@@ -814,5 +814,16 @@ export default function renderTransactions() {
   }
 
   render();
+
+  // Auto-rerender cuando la cache de transacciones / cards / accounts cambia
+  // (especialmente para que el id local se refresque al id real del backend
+  // y los botones editar/eliminar sigan funcionando sin recargar la pagina).
+  const offs = ['transactions', 'cards', 'accounts'].map((col) => {
+    return store.on(col, () => {
+      if (!document.body.contains(page)) { offs.forEach((u) => u && u()); return; }
+      render();
+    });
+  });
+
   return page;
 }

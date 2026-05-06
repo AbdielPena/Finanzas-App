@@ -115,11 +115,16 @@
 }
 /* Sidebar / main / header / overlay deben quedar por ENCIMA del fondo de
    partículas. Solo subimos el z-index — no tocamos `position` porque la
-   sidebar es `fixed` (cambiarla rompe el layout). */
-.app-shell > .sidebar { z-index: 2; }
+   sidebar es `fixed` (cambiarla rompe el layout).
+   IMPORTANTE: en mobile (<=960px) responsive.css define z-index: 100 para
+   la sidebar.mobile-open para que aparezca encima del overlay (z 99).
+   Por eso aqui no scopeamos a desktop con un selector menos especifico. */
 .app-shell > .app-main { z-index: 1; }
 .app-shell > .bottom-nav { z-index: 50; }
 .app-shell > .mobile-overlay { z-index: 99; }
+@media (min-width: 961px) {
+  .app-shell > .sidebar { z-index: 2; }
+}
 /* Header está dentro de app-main, no es hijo directo de app-shell */
 
 .sidebar-section {

@@ -964,5 +964,21 @@ export default function renderDebts() {
   }
 
   render();
+
+  // Re-render cuando cambien las colecciones que la pagina usa.
+  // Esto cubre el caso de la reconciliacion del backend: optimistic write
+  // crea un debt con id local, luego el backend asigna su UUID real,
+  // _processQueue actualiza la cache y notifica. Sin esta subscripcion los
+  // botones del DOM se quedan apuntando al id viejo y "editar" no abre nada.
+  // Auto-unsubscribe cuando el nodo de la pagina se quita del DOM.
+  const offDebts = store.on('debts', () => {
+    if (!document.body.contains(page)) { offDebts(); return; }
+    render();
+  });
+  const offTpls = store.on('debt_templates', () => {
+    if (!document.body.contains(page)) { offTpls(); return; }
+    render();
+  });
+
   return page;
 }

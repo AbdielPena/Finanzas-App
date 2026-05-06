@@ -79,6 +79,50 @@ export async function authenticateBiometric(reason = 'Inicia sesion en FinanzApp
   }
 }
 
+const BIO_SERVER = 'finanzapp';
+
+/**
+ * Guarda email + password protegidos con biometria. Despues de esto el
+ * login screen puede ofrecer "Iniciar con huella" sin que el usuario
+ * vuelva a escribir su contrasena.
+ */
+export async function saveCredentialsForBiometric(email, password) {
+  const plugin = getPlugin();
+  if (!plugin || !email || !password) return false;
+  try {
+    await plugin.setCredentials({ server: BIO_SERVER, username: email, password });
+    return true;
+  } catch (e) {
+    console.warn('[bio] no se pudo guardar credenciales:', e?.message || e);
+    return false;
+  }
+}
+
+/**
+ * Lee las credenciales guardadas. Pide biometria implicitamente.
+ * Devuelve {username, password} si exitoso, null si falla.
+ */
+export async function getStoredCredentials() {
+  const plugin = getPlugin();
+  if (!plugin) return null;
+  try {
+    const r = await plugin.getCredentials({ server: BIO_SERVER });
+    return { email: r.username, password: r.password };
+  } catch (e) {
+    console.warn('[bio] no se pudo leer credenciales:', e?.message || e);
+    return null;
+  }
+}
+
+export async function clearStoredCredentials() {
+  const plugin = getPlugin();
+  if (!plugin) return false;
+  try {
+    await plugin.deleteCredentials({ server: BIO_SERVER });
+    return true;
+  } catch { return false; }
+}
+
 export function isBiometricEnabled() {
   return localStorage.getItem(BIO_KEY) === '1';
 }

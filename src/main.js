@@ -515,11 +515,11 @@ function showApp() {
     });
   });
 
-  // Sidebar toggle
+  // Sidebar toggle - el breakpoint debe coincidir con responsive.css (960)
   document.getElementById('sidebar-toggle').addEventListener('click', () => {
     const shell = document.getElementById('app-shell');
     const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 960) {
       sidebar.classList.toggle('mobile-open');
       document.getElementById('mobile-overlay').classList.toggle('show');
     } else {

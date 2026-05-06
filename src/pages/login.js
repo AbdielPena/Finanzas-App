@@ -5,6 +5,12 @@ import {
   hasAnyUsers, loginUser, registerUser, selectWorkspace,
   ROLES, hasLegacyData, finishForcedPasswordChange
 } from '../auth.js';
+import {
+  isBiometricSupported, isBiometricEnabled, setBiometricEnabled,
+  saveCredentialsForBiometric, getStoredCredentials,
+} from '../biometric.js';
+import { openModal, closeModal, showToast } from '../components.js';
+import { icon } from '../icons.js';
 
 const AVATARS = ['😊','🦁','🐼','🦊','🐸','🤖','🧑‍💻','👩‍💼','🧙','🦄'];
 
@@ -97,6 +103,9 @@ export function renderLogin(onSuccess) {
             Entrar →
           </button>
         </form>
+        <button type="button" id="bio-quick-login" class="btn btn-secondary" style="display:none;width:100%;justify-content:center;align-items:center;gap:8px;margin-top:10px">
+          ${icon('lock', 16)} Iniciar con biometría
+        </button>
         <div style="text-align:center;margin-top:20px;font-size:0.85rem;color:var(--text-muted)">
           ¿No tienes cuenta?
           <button class="btn btn-ghost btn-sm" id="go-register" style="font-size:0.85rem">Regístrate gratis</button>
@@ -110,41 +119,110 @@ export function renderLogin(onSuccess) {
       e.preventDefault();
       const emailVal = div.querySelector('#login-email').value;
       const passVal  = div.querySelector('#login-pass').value;
-      const btn      = div.querySelector('#login-btn');
-      const errEl    = div.querySelector('#login-error');
-      errEl.style.display = 'none';
-      btn.disabled = true;
-      btn.textContent = 'Verificando...';
-
-      try {
-        const result = await loginUser(emailVal, passVal);
-        let user = result.user;
-        let workspaces = result.workspaces;
-
-        // If forced to change, wait
-        if (result.forcePasswordChange) {
-           // Provide an empty array for workspaces just for the signature, since the reset flow needs to re-fetch or we just pass the raw user
-           showScreen(() => forcedPasswordChangeScreen(user, user.workspaces || [], onSuccess));
-           return;
-        }
-
-        if (workspaces && workspaces.length === 1) {
-          // Single workspace → go straight in
-          selectWorkspace(user.id, workspaces[0].id);
-          onSuccess();
-        } else {
-          // Multiple workspaces → show selector
-          showScreen(() => workspaceSelector(user, workspaces, onSuccess));
-        }
-      } catch (err) {
-        errEl.textContent = err.message;
-        errEl.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Entrar →';
-      }
+      await processLogin(emailVal, passVal, div);
     });
 
+    // Quick-login con biometria (solo si la APK tiene biometria activada
+    // y guardo credenciales en una sesion previa)
+    setTimeout(async () => {
+      try {
+        if (!isBiometricEnabled()) return;
+        const supported = await isBiometricSupported();
+        if (!supported) return;
+        const btn = div.querySelector('#bio-quick-login');
+        if (!btn) return;
+        btn.style.display = 'flex';
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.innerHTML = `${icon('lock', 16)} Verificando...`;
+          try {
+            const creds = await getStoredCredentials();
+            if (!creds || !creds.email) {
+              showToast('warning', 'No hay credenciales biometricas guardadas', 'Inicia sesion una vez para activarlas.');
+              btn.disabled = false;
+              btn.innerHTML = `${icon('lock', 16)} Iniciar con biometria`;
+              return;
+            }
+            await processLogin(creds.email, creds.password, div);
+          } catch (err) {
+            showToast('error', 'Login biometrico fallo', err?.message || '');
+            btn.disabled = false;
+            btn.innerHTML = `${icon('lock', 16)} Iniciar con biometria`;
+          }
+        });
+      } catch {}
+    }, 50);
+
     return div;
+  }
+
+  async function processLogin(emailVal, passVal, div) {
+    const btn   = div.querySelector('#login-btn');
+    const errEl = div.querySelector('#login-error');
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+    try {
+      const result = await loginUser(emailVal, passVal);
+      let user = result.user;
+      let workspaces = result.workspaces;
+      if (result.forcePasswordChange) {
+        showScreen(() => forcedPasswordChangeScreen(user, user.workspaces || [], onSuccess));
+        return;
+      }
+      // Despues de un login exitoso, ofrecer activar biometria si aplica.
+      await maybeOfferBiometricSetup(emailVal, passVal);
+      if (workspaces && workspaces.length === 1) {
+        selectWorkspace(user.id, workspaces[0].id);
+        onSuccess();
+      } else {
+        showScreen(() => workspaceSelector(user, workspaces, onSuccess));
+      }
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Entrar →';
+    }
+  }
+
+  async function maybeOfferBiometricSetup(email, password) {
+    try {
+      const PROMPTED_KEY = 'finanzapp_bio_prompt_shown';
+      if (localStorage.getItem(PROMPTED_KEY) === '1') return;
+      if (isBiometricEnabled()) return;
+      const supported = await isBiometricSupported();
+      if (!supported) return;
+      // Marca el prompt como mostrado aun si el usuario lo rechaza
+      localStorage.setItem(PROMPTED_KEY, '1');
+      await new Promise((resolve) => {
+        const modal = openModal('Inicio de sesion biometrico', `
+          <div style="text-align:center;padding:8px 4px 16px">
+            <div style="font-size:2.4rem;margin-bottom:10px">🔒</div>
+            <p style="margin:0 0 12px;font-size:0.95rem">¿Quieres activar el inicio de sesion con huella o face ID?</p>
+            <p style="margin:0;font-size:0.8rem;color:var(--text-muted)">La proxima vez podras entrar a FinanzApp con un solo toque, sin escribir tu contrasena.</p>
+          </div>
+          <div class="form-actions" style="margin-top:18px">
+            <button type="button" class="btn btn-secondary" id="bio-skip">Ahora no</button>
+            <button type="button" class="btn btn-primary" id="bio-enable">${icon('lock', 14)} Activar</button>
+          </div>
+        `);
+        modal.querySelector('#bio-skip').addEventListener('click', () => { closeModal(); resolve(); });
+        modal.querySelector('#bio-enable').addEventListener('click', async () => {
+          const ok = await saveCredentialsForBiometric(email, password);
+          if (ok) {
+            setBiometricEnabled(true);
+            showToast('success', 'Biometria activada', 'La proxima vez podras iniciar sesion con tu huella.');
+          } else {
+            showToast('warning', 'No se pudo activar', 'Intenta de nuevo desde Configuracion → Seguridad.');
+          }
+          closeModal();
+          resolve();
+        });
+      });
+    } catch (e) {
+      console.warn('[bio-prompt] error:', e?.message || e);
+    }
   }
 
   // ── Register Screen
