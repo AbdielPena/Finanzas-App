@@ -326,16 +326,16 @@ export default function renderDebts() {
       </div>
 
       <div id="tab-content" class="stagger-children">
-        ${activeTabValue === 'activas' ? renderActivasTab(debtsArr) : 
+        ${activeTabValue === 'activas' ? renderActivasTab(debtsArr, templates) :
           activeTabValue === 'plantillas' ? renderTemplatesTab(templates) : renderLoansTab()}
       </div>
     `;
     setupEvents();
   };
 
-  function renderActivasTab(debts) {
+  function renderActivasTab(debts, templates = []) {
     try {
-      return _renderActivasTabInner(debts);
+      return _renderActivasTabInner(debts, templates);
     } catch (err) {
       console.error('[debts] error renderizando tab Activas:', err);
       return `
@@ -348,7 +348,8 @@ export default function renderDebts() {
     }
   }
 
-  function _renderActivasTabInner(debts) {
+  function _renderActivasTabInner(debts, templates) {
+    templates = Array.isArray(templates) ? templates : [];
     if (debts.length === 0) {
       return `
         <div class="empty-state card">
