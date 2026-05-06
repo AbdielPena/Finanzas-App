@@ -87,11 +87,12 @@ function payCardForm(card) {
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Desde Cuenta</label>
-        <select class="form-select" id="pay-account">
-          <option value="">Sin cuenta origen (solo ajustar tarjeta)</option>
+        <label class="form-label">Desde Cuenta <span class="required">*</span></label>
+        <select class="form-select" id="pay-account" required>
+          <option value="">Selecciona la cuenta origen</option>
           ${accounts.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('')}
         </select>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">El monto se debitara de esa cuenta y quedara en el historial.</p>
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('active-modal')?.remove();document.body.style.overflow=''">Cancelar</button>
@@ -261,23 +262,27 @@ export default function renderCards() {
       const amount = parseFloat(modal.querySelector('#pay-amount').value) || 0;
       const accountId = modal.querySelector('#pay-account').value;
       if (amount <= 0) { showToast('error', 'Monto inválido'); return; }
+      if (!accountId) {
+        showToast('error', 'Selecciona la cuenta de origen', 'Sin cuenta el pago no quedaria registrado en el historial.');
+        return;
+      }
       // Update card balance
       const newUsed = Math.max(0, (parseFloat(card.saldoUsado) || 0) - amount);
       store.update('cards', card.id, { saldoUsado: newUsed });
-      // Create transaction if account selected
-      if (accountId) {
-        store.add('transactions', {
-          id: generateId(),
-          tipo: 'gasto',
-          monto: amount,
-          descripcion: `Pago a tarjeta: ${card.nombre}`,
-          categoriaId: 'cat_debt_payment',
-          cuentaId: accountId,
-          tarjetaId: card.id,
-          fecha: new Date().toISOString().split('T')[0],
-          notas: 'Pago de tarjeta de crédito',
-        });
-      }
+      // Categoria 'Pago de Deudas' por nombre (no hardcoded id - el backend
+      // usa UUIDs y rechaza ids estilo 'cat_debt_payment')
+      const cats = store.getAll('categories');
+      const debtCat = cats.find(c => /pago.*deud/i.test(c.nombre || '')) || cats.find(c => c.nombre === 'Pago de Deudas');
+      store.add('transactions', {
+        tipo: 'gasto',
+        monto: amount,
+        descripcion: `Pago a tarjeta: ${card.nombre}`,
+        categoriaId: debtCat?.id || null,
+        cuentaId: accountId,
+        tarjetaId: card.id,
+        fecha: new Date().toISOString().split('T')[0],
+        notas: 'Pago de tarjeta de crédito',
+      });
       showToast('success', 'Pago registrado', `Se abonaron ${formatMoney(amount)} a ${card.nombre}`);
       closeModal();
       render();
