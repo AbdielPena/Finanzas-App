@@ -732,6 +732,14 @@ function showApp() {
   // Init router
   router.init('page-content');
 
+  // Auto-refresh de la pagina actual cuando cambian datos relevantes para el
+  // balance/UI. Esto cubre el caso del dashboard que no tiene render() propio
+  // y se quedaba con valores stale despues de una mutacion (ej: balance de
+  // cuenta sin actualizar tras pago de grupo de deudas).
+  ['transactions','accounts','cards','external_cards','debts','debt_payments','loans','loan_payments','subscriptions','goals','goal_contributions'].forEach((col) => {
+    store.on(col, () => router.refresh());
+  });
+
   // Init AI Chat (FAB + Drawer)
   initAIChat();
 

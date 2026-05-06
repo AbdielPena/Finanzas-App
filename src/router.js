@@ -30,6 +30,21 @@ class Router {
     window.location.hash = `#${path}`;
   }
 
+  /**
+   * Re-renderiza la pagina actual sin cambiar la URL. Se usa cuando una
+   * mutacion al store afecta los datos visibles (balances, totales,
+   * transacciones agregadas, etc.) y la pagina no tiene su propia
+   * subscripcion al cache.
+   * Debounced a 50ms para que multiples notify() seguidos no tumben la UI.
+   */
+  refresh() {
+    if (this._refreshTimer) return;
+    this._refreshTimer = setTimeout(() => {
+      this._refreshTimer = null;
+      this._resolve();
+    }, 50);
+  }
+
   _resolve() {
     const hash = window.location.hash.slice(1) || '/dashboard';
     const path = hash.split('?')[0];
