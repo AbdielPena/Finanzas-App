@@ -905,6 +905,7 @@ export default function renderDebts() {
       `;
     }).join('');
 
+    const pendientesCount = debts.filter(d => d.estado !== 'pagada').length;
     const modal = openModal(title, `
       <div style="margin-bottom:16px">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
@@ -914,6 +915,15 @@ export default function renderDebts() {
           <div><div style="font-size:0.7rem;color:var(--text-muted)">Pendiente</div><div style="font-weight:700;font-size:1.05rem;color:var(--color-expense)">${formatMoney(pend)}</div></div>
         </div>
       </div>
+
+      ${pend > 0 ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+          <button id="grp-pay-all" class="btn btn-primary btn-sm">${icon('check', 14)} Pagar todo lo adeudado</button>
+          <button id="grp-pay-count" class="btn btn-secondary btn-sm">${icon('check', 14)} Pagar N registros</button>
+          <button id="grp-pay-amount" class="btn btn-secondary btn-sm">${icon('dollarSign', 14)} Abono parcial</button>
+        </div>
+      ` : ''}
+
       <div class="table-container">
         <table class="data-table" style="font-size:0.85rem">
           <thead><tr><th>Fecha</th><th>Descripción</th><th class="right">Total</th><th class="right">Pagado</th><th class="right">Pendiente</th><th>Estado</th><th></th></tr></thead>
@@ -921,6 +931,19 @@ export default function renderDebts() {
         </table>
       </div>
     `, { width: '780px' });
+
+    modal.querySelector('#grp-pay-all')?.addEventListener('click', () => {
+      closeModal();
+      openPayGroupModal({ groupKey, mode: 'all', defaultAmount: pend, pendientesCount });
+    });
+    modal.querySelector('#grp-pay-count')?.addEventListener('click', () => {
+      closeModal();
+      openPayGroupModal({ groupKey, mode: 'count', defaultAmount: pend, pendientesCount });
+    });
+    modal.querySelector('#grp-pay-amount')?.addEventListener('click', () => {
+      closeModal();
+      openPayGroupModal({ groupKey, mode: 'amount', defaultAmount: pend, pendientesCount });
+    });
 
     modal.querySelectorAll('[data-tpl-edit]').forEach(b => b.addEventListener('click', () => {
       const d = store.getById('debts', b.dataset.tplEdit);
@@ -938,6 +961,183 @@ export default function renderDebts() {
       const d = store.getById('debts', b.dataset.tplPay);
       if (d) { closeModal(); openPayModal(normDebt(d)); }
     }));
+  }
+
+  // ---------- Pago de grupo (todo / N registros / monto custom) ----------
+  function openPayGroupModal({ groupKey, mode, defaultAmount, pendientesCount }) {
+    const accounts = store.getAll('accounts').filter(a => a.activa !== false);
+    const banks = store.getAll('banks');
+    const accountOptionsHtml = accounts.map(a => {
+      const b = banks.find(x => x.id === a.bancoId);
+      return `<option value="${a.id}">${b?.nombre ? b.nombre + ' — ' : ''}${a.nombre}</option>`;
+    }).join('');
+
+    const titleByMode = {
+      all: 'Pagar todo lo adeudado',
+      count: 'Pagar N registros',
+      amount: 'Abono parcial',
+    };
+
+    const modeBlockHtml = (() => {
+      if (mode === 'all') {
+        return `
+          <div class="form-group">
+            <label class="form-label">Monto a pagar</label>
+            <div class="input-prefix-wrapper"><span class="input-prefix">RD$</span>
+              <input type="number" class="form-input" id="pgrp-amount" value="${defaultAmount.toFixed(2)}" readonly />
+            </div>
+            <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Cubre los ${pendientesCount} registros pendientes.</p>
+          </div>
+        `;
+      }
+      if (mode === 'count') {
+        return `
+          <div class="form-group">
+            <label class="form-label">Cantidad de registros a pagar (1 a ${pendientesCount})</label>
+            <input type="number" class="form-input" id="pgrp-count" value="1" min="1" max="${pendientesCount}" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Monto calculado</label>
+            <div class="input-prefix-wrapper"><span class="input-prefix">RD$</span>
+              <input type="number" class="form-input" id="pgrp-amount" value="0" readonly />
+            </div>
+          </div>
+        `;
+      }
+      // mode === 'amount'
+      return `
+        <div class="form-group">
+          <label class="form-label">Monto a abonar <span class="required">*</span></label>
+          <div class="input-prefix-wrapper"><span class="input-prefix">RD$</span>
+            <input type="number" class="form-input" id="pgrp-amount" value="" step="0.01" min="0.01" max="${defaultAmount.toFixed(2)}" required placeholder="0.00" />
+          </div>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Maximo: ${formatMoney(defaultAmount)} (total pendiente del grupo).</p>
+        </div>
+      `;
+    })();
+
+    const modal = openModal(titleByMode[mode] || 'Pagar grupo', `
+      <form id="pay-group-form">
+        <div class="form-group">
+          <label class="form-label">Cuenta de origen <span class="required">*</span></label>
+          <select class="form-select" id="pgrp-account" required>
+            <option value="">Selecciona la cuenta</option>
+            ${accountOptionsHtml}
+          </select>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">El monto se debitara de esta cuenta y se registrara como gasto.</p>
+        </div>
+        ${modeBlockHtml}
+        <div class="form-group">
+          <label class="form-label">Notas (opcional)</label>
+          <textarea class="form-textarea" id="pgrp-notes" placeholder="Nota interna sobre este pago..."></textarea>
+        </div>
+        <div class="form-actions" style="margin-top:18px">
+          <button type="button" class="btn btn-secondary" id="pgrp-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">${icon('check', 16)} Confirmar pago</button>
+        </div>
+      </form>
+    `);
+
+    // Calculo automatico para mode=count
+    const debtsAll = (() => {
+      const all = store.getAll('debts').map(normDebt);
+      const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+      if (groupKey?.startsWith('tpl:')) {
+        const id = groupKey.slice(4);
+        return all.filter(d => (d.templateId || d.metadata?.templateId) === id);
+      }
+      if (groupKey?.startsWith('da:')) {
+        const [desc, acr] = groupKey.slice(3).split('|');
+        return all.filter(d => norm(d.descripcion) === desc && norm(d.acreedor) === acr);
+      }
+      return [];
+    })();
+    const pendientes = debtsAll
+      .filter(d => d.estado !== 'pagada')
+      .sort((a, b) => (a.fechaVencimiento || '').localeCompare(b.fechaVencimiento || ''));
+
+    if (mode === 'count') {
+      const countInput = modal.querySelector('#pgrp-count');
+      const amountInput = modal.querySelector('#pgrp-amount');
+      const sync = () => {
+        const n = Math.max(1, Math.min(pendientesCount, parseInt(countInput.value, 10) || 1));
+        const sum = pendientes.slice(0, n).reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
+        amountInput.value = sum.toFixed(2);
+      };
+      countInput.addEventListener('input', sync);
+      sync();
+    }
+
+    modal.querySelector('#pgrp-cancel').addEventListener('click', () => closeModal());
+    modal.querySelector('#pay-group-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const accountId = modal.querySelector('#pgrp-account').value;
+      const amountToApply = parseFloat(modal.querySelector('#pgrp-amount').value) || 0;
+      const notes = modal.querySelector('#pgrp-notes').value.trim();
+      if (!accountId) { showToast('error', 'Selecciona la cuenta de origen'); return; }
+      if (amountToApply <= 0) { showToast('error', 'Monto invalido'); return; }
+
+      // ---------- Distribuir el pago entre las deudas pendientes ----------
+      // Estrategia: ir consumiendo deudas en orden (oldest first) hasta agotar
+      // el monto. La ultima deuda puede quedar parcialmente pagada.
+      let remaining = amountToApply;
+      const updates = [];
+      for (const d of pendientes) {
+        if (remaining <= 0) break;
+        const saldo = parseFloat(d.saldoPendiente) || 0;
+        const apply = Math.min(remaining, saldo);
+        if (apply <= 0) continue;
+        const newPagado = (parseFloat(d.montoPagado) || 0) + apply;
+        const newSaldo = +(saldo - apply).toFixed(2);
+        updates.push({
+          id: d.id,
+          montoPagado: +newPagado.toFixed(2),
+          saldoPendiente: newSaldo,
+          estado: newSaldo <= 0.001 ? 'pagada' : (d.estado || 'activa'),
+        });
+        remaining -= apply;
+      }
+
+      if (updates.length === 0) { showToast('error', 'Nada que pagar'); return; }
+
+      // Buscar categoria 'Pago de Deudas' (UUID real, no hardcoded)
+      const cats = store.getAll('categories');
+      const debtCat = cats.find(c => /pago.*deud/i.test(c.nombre || '')) || cats.find(c => c.nombre === 'Pago de Deudas');
+      const tpl = groupKey?.startsWith('tpl:') ? store.getById('debt_templates', groupKey.slice(4)) : null;
+      const concepto = tpl?.nombre || debtsAll[0]?.descripcion || 'Grupo de deudas';
+
+      // 1. Registrar UNA transaccion gasto que debita la cuenta
+      store.add('transactions', {
+        tipo: 'gasto',
+        monto: +(amountToApply).toFixed(2),
+        descripcion: `Pago grupo: ${concepto}`,
+        categoriaId: debtCat?.id || null,
+        cuentaId: accountId,
+        tarjetaId: null,
+        fecha: new Date().toISOString().split('T')[0],
+        notas: notes || `Pago aplicado a ${updates.length} ${updates.length === 1 ? 'registro' : 'registros'}`,
+      });
+
+      // 2. Actualizar las deudas afectadas
+      updates.forEach(u => {
+        store.update('debts', u.id, {
+          montoPagado: u.montoPagado,
+          saldoPendiente: u.saldoPendiente,
+          estado: u.estado,
+        });
+      });
+
+      const totalRecords = updates.length;
+      const fullyPaid = updates.filter(u => u.estado === 'pagada').length;
+      showToast('success',
+        'Pago aplicado',
+        `${formatMoney(amountToApply)} debitado · ${fullyPaid} ${fullyPaid === 1 ? 'deuda saldada' : 'deudas saldadas'}, ${totalRecords - fullyPaid} parcial${(totalRecords - fullyPaid) === 1 ? '' : 'es'}`
+      );
+      closeModal();
+      render();
+      // Reabrir el detalle del grupo para que el usuario vea el avance
+      setTimeout(() => openDebtsGroupDetail(groupKey), 100);
+    });
   }
 
   function createDebtFromTemplate(tpl) {
