@@ -260,6 +260,36 @@ export default function renderDebts() {
   page.className = 'page-content animate-fade-in';
   let activeTabValue = 'activas';
 
+  // ---------- Estado de filtros del tab "Compromisos Activos" ----------
+  // El usuario puede combinarlos. Persistencia ligera en localStorage.
+  const FILTERS_KEY = 'finanzapp_debt_filters';
+  const filters = (() => {
+    try { return Object.assign({
+      search: '',
+      estado: 'todas',     // todas | pendientes | parciales | vencidas | pagadas | archivadas
+      sortBy: 'priority',  // priority | venc | ingreso | monto | acreedor
+      acreedor: '',
+      templateId: '',
+    }, JSON.parse(localStorage.getItem(FILTERS_KEY) || '{}')); } catch {
+      return { search:'', estado:'todas', sortBy:'priority', acreedor:'', templateId:'' };
+    }
+  })();
+  const persistFilters = () => { try { localStorage.setItem(FILTERS_KEY, JSON.stringify(filters)); } catch {} };
+
+  // Auto-archive: pagadas con paidAt > 30 dias se ocultan del listado principal
+  // pero NO se borran del backend. Si paidAt no existe lo derivamos de
+  // updatedAt cuando el estado paso a 'pagada'.
+  const ARCHIVE_DAYS = 30;
+  const isArchived = (d) => {
+    if (d.estado !== 'pagada') return false;
+    const paidAtStr = d.paidAt || d.metadata?.paidAt || d.updatedAt || d.createdAt;
+    if (!paidAtStr) return false;
+    const paidAt = new Date(paidAtStr);
+    if (isNaN(paidAt)) return false;
+    const ageDays = Math.floor((Date.now() - paidAt.getTime()) / 86400000);
+    return ageDays >= ARCHIVE_DAYS;
+  };
+
   const render = () => {
     const rawDebts = store.getAll('debts');
     const debtsArr = rawDebts.map(normDebt);
@@ -318,41 +348,56 @@ export default function renderDebts() {
     const active = debts.filter(d => d.estado !== 'pagada');
     const totalPendiente = active.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
 
-    // ---------- Agrupar por plantilla / persona / concepto ----------
-    // Llave de agrupacion (en orden de prioridad):
-    //   1. templateId - identificador estable de la plantilla
-    //   2. concepto+acreedor - misma descripcion + mismo acreedor
-    // Esto cubre tambien deudas legacy sin templateId, y deudas creadas
-    // con plantillas duplicadas (mismo nombre, distinto UUID por bugs viejos).
-    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    // ---------- Filtrar (search/estado/acreedor/templateId) ----------
+    const matchesFilters = (d) => {
+      if (!filters.search && filters.estado === 'todas' && !filters.acreedor && !filters.templateId) return true;
+      // Search libre
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        const hay = [d.descripcion, d.acreedor, d.notas].some(v => String(v || '').toLowerCase().includes(q));
+        if (!hay) return false;
+      }
+      // Estado
+      const isPaid = d.estado === 'pagada';
+      const isPartial = !isPaid && (parseFloat(d.montoPagado) || 0) > 0;
+      const isOverdue = !isPaid && d.fechaVencimiento && d.fechaVencimiento < today;
+      const archived = isArchived(d);
+      switch (filters.estado) {
+        case 'pendientes': if (isPaid || isPartial) return false; break;
+        case 'parciales':  if (!isPartial) return false; break;
+        case 'vencidas':   if (!isOverdue) return false; break;
+        case 'pagadas':    if (!isPaid || archived) return false; break;
+        case 'archivadas': if (!archived) return false; break;
+        case 'todas':      if (archived) return false; break; // archivadas se ocultan por default
+      }
+      if (filters.acreedor && norm(d.acreedor) !== norm(filters.acreedor)) return false;
+      if (filters.templateId) {
+        const tplId = d.templateId || d.metadata?.templateId;
+        if (tplId !== filters.templateId) return false;
+      }
+      return true;
+    };
+    const filteredDebts = debts.filter(matchesFilters);
+
+    // ---------- Agrupar (mantenemos lo que ya teniamos) ----------
     const groupKey = (d) => {
       const tplId = d.templateId || d.metadata?.templateId;
       if (tplId) return `tpl:${tplId}`;
       const desc = norm(d.descripcion);
       const acr = norm(d.acreedor);
-      // Si tiene descripcion Y acreedor, agrupa por la combinacion
       if (desc && acr) return `da:${desc}|${acr}`;
-      // Si solo tiene descripcion sin acreedor, NO agrupa (cada deuda standalone)
       return null;
     };
-
-    const groups = new Map(); // groupKey -> { key, tplId|null, debts: [] }
+    const groups = new Map();
     const standalone = [];
-    debts.forEach((d) => {
+    filteredDebts.forEach((d) => {
       const key = groupKey(d);
       if (!key) { standalone.push(d); return; }
       if (!groups.has(key)) {
-        groups.set(key, {
-          key,
-          tplId: d.templateId || d.metadata?.templateId || null,
-          debts: [],
-        });
+        groups.set(key, { key, tplId: d.templateId || d.metadata?.templateId || null, debts: [] });
       }
       groups.get(key).debts.push(d);
     });
-
-    // Si un grupo tiene una sola deuda, la tratamos como standalone
-    // (no tiene sentido un card "agrupado" con 1 registro).
     for (const [key, g] of [...groups.entries()]) {
       if (g.debts.length < 2) {
         standalone.push(...g.debts);
@@ -360,94 +405,170 @@ export default function renderDebts() {
       }
     }
 
-    const groupCardHtml = (g) => {
-      const tpl = g.tplId ? store.getById('debt_templates', g.tplId) : null;
-      const nombre = tpl?.nombre || g.debts[0]?.descripcion || 'Grupo de deudas';
-      const acreedor = tpl?.acreedor || g.debts[0]?.acreedor || '';
-      const total   = g.debts.reduce((s, d) => s + (parseFloat(d.montoTotal) || parseFloat(d.montoOriginal) || 0), 0);
-      const pagado  = g.debts.reduce((s, d) => s + (parseFloat(d.montoPagado) || 0), 0);
-      const pend    = g.debts.reduce((s, d) => s + (parseFloat(d.saldoPendiente) || 0), 0);
-      const progress = total > 0 ? Math.round((pagado / total) * 100) : 0;
-      const allPaid = g.debts.every(d => d.estado === 'pagada');
-      const sourceLabel = tpl ? 'Plantilla' : 'Agrupada por nombre + acreedor';
-      return `
-        <div class="card" data-debt-group="${escapeAttr(g.key)}" style="cursor:pointer; margin-bottom:16px; border-left:4px solid ${allPaid ? 'var(--color-success)' : 'var(--accent-primary)'}; transition: transform 0.15s">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start">
-            <div style="flex:1">
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;flex-wrap:wrap">
-                <span style="font-weight:700; font-size:1.05rem">${escapeHtml(nombre)}</span>
-                <span class="badge badge-info">${g.debts.length} registros</span>
-                ${allPaid ? '<span class="badge badge-success">Pagada</span>' : ''}
-                <span style="font-size:0.65rem;color:var(--text-muted)">· ${sourceLabel}</span>
-              </div>
-              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Acreedor: <strong>${escapeHtml(acreedor)}</strong></div>
-
-              <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px">
-                <span>Pagado: ${formatMoney(pagado)} de ${formatMoney(total)}</span>
-                <span>${progress}%</span>
-              </div>
-              <div class="progress-bar" style="height:6px"><div class="progress-fill ${allPaid ? 'income' : 'expense'}" style="width:${progress}%"></div></div>
-              <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:6px">
-                Pendiente: <strong style="color:var(--color-expense)">${formatMoney(pend)}</strong>
-              </div>
-            </div>
-            <div style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:4px">
-              ${icon('arrowRight', 14)} Ver detalles
-            </div>
-          </div>
-        </div>
-      `;
-    };
-
-    const debtCardHtml = (d) => {
+    // ---------- Prioridad y orden ----------
+    // Prioridad por defecto: vencidas > pendientes > parciales > pagadas
+    const priority = (d) => {
       const isPaid = d.estado === 'pagada';
-      const isOverdue = d.fechaVencimiento && d.fechaVencimiento < today && !isPaid;
-      const progress = (d.montoTotal || 0) > 0 ? Math.round((d.montoPagado / d.montoTotal) * 100) : 0;
-      return `
-        <div class="card" style="margin-bottom:16px; opacity:${isPaid ? '0.7' : '1'}; border-left:4px solid ${isPaid ? 'var(--color-success)' : isOverdue ? 'var(--color-expense)' : 'var(--accent-primary)'}">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start">
-            <div style="flex:1">
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
-                <span style="font-weight:700; font-size:1.05rem">${escapeHtml(d.descripcion || '')}</span>
-                <span class="badge ${isPaid ? 'badge-success' : isOverdue ? 'badge-danger' : 'badge-warning'}">
-                  ${isPaid ? 'Pagada' : isOverdue ? 'Vencida' : 'Pendiente'}
-                </span>
-              </div>
-              <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px">Acreedor: <strong>${escapeHtml(d.acreedor || '')}</strong></div>
+      const isPartial = !isPaid && (parseFloat(d.montoPagado) || 0) > 0;
+      const isOverdue = !isPaid && d.fechaVencimiento && d.fechaVencimiento < today;
+      if (isOverdue) return 0;
+      if (isPartial) return 2;
+      if (isPaid)    return 3;
+      return 1;
+    };
+    const groupPriority = (g) => Math.min(...g.debts.map(priority));
+    const sortDebts = (a, b) => {
+      const sb = filters.sortBy || 'priority';
+      if (sb === 'priority') {
+        const dp = priority(a) - priority(b);
+        if (dp) return dp;
+        return (a.fechaVencimiento || '').localeCompare(b.fechaVencimiento || '');
+      }
+      if (sb === 'venc')     return (a.fechaVencimiento || '9999').localeCompare(b.fechaVencimiento || '9999');
+      if (sb === 'ingreso')  return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+      if (sb === 'monto')    return (parseFloat(b.montoTotal) || 0) - (parseFloat(a.montoTotal) || 0);
+      if (sb === 'acreedor') return String(a.acreedor || '').localeCompare(String(b.acreedor || ''));
+      return 0;
+    };
+    const sortGroups = (a, b) => {
+      const sb = filters.sortBy || 'priority';
+      if (sb === 'priority') return groupPriority(a) - groupPriority(b);
+      if (sb === 'monto')    return b.debts.reduce((s,d)=>s+(parseFloat(d.saldoPendiente)||0),0) - a.debts.reduce((s,d)=>s+(parseFloat(d.saldoPendiente)||0),0);
+      if (sb === 'acreedor') return String(a.debts[0]?.acreedor || '').localeCompare(String(b.debts[0]?.acreedor || ''));
+      return 0;
+    };
+    standalone.sort(sortDebts);
+    const sortedGroups = [...groups.values()].sort(sortGroups);
 
-              <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px">
-                <span>Avance: ${formatMoney(d.montoPagado)} pagado</span>
-                <span>${progress}%</span>
+    // ---------- Card compacto ----------
+    const compactGroupHtml = (g) => {
+      const tpl = g.tplId ? store.getById('debt_templates', g.tplId) : null;
+      const nombre = tpl?.nombre || g.debts[0]?.descripcion || 'Grupo';
+      const acreedor = tpl?.acreedor || g.debts[0]?.acreedor || '';
+      const total = g.debts.reduce((s,d)=>s+(parseFloat(d.montoTotal)||parseFloat(d.montoOriginal)||0), 0);
+      const pagado = g.debts.reduce((s,d)=>s+(parseFloat(d.montoPagado)||0), 0);
+      const pend = g.debts.reduce((s,d)=>s+(parseFloat(d.saldoPendiente)||0), 0);
+      const progress = total > 0 ? Math.round((pagado/total)*100) : 0;
+      const allPaid = g.debts.every(d => d.estado === 'pagada');
+      const overdueCount = g.debts.filter(d => d.estado !== 'pagada' && d.fechaVencimiento && d.fechaVencimiento < today).length;
+      const borderColor = allPaid ? 'var(--color-success)' : overdueCount > 0 ? 'var(--color-expense)' : 'var(--accent-primary)';
+      return `
+        <div class="card debt-card-compact" data-debt-group="${escapeAttr(g.key)}" style="cursor:pointer;padding:12px 14px;margin-bottom:8px;border-left:3px solid ${borderColor};opacity:${allPaid ? 0.65 : 1}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
+                <span style="font-weight:700;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(nombre)}</span>
+                <span class="badge badge-info" style="font-size:0.62rem;padding:1px 6px">${g.debts.length}</span>
+                ${overdueCount > 0 ? `<span class="badge badge-danger" style="font-size:0.62rem;padding:1px 6px">${overdueCount} venc</span>` : ''}
+                ${allPaid ? '<span class="badge badge-success" style="font-size:0.62rem;padding:1px 6px">Pagada</span>' : ''}
               </div>
-              <div class="progress-bar" style="height:6px"><div class="progress-fill ${isPaid ? 'income' : 'expense'}" style="width:${progress}%"></div></div>
-              <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:6px">
-                Pendiente: <strong style="color:var(--color-expense)">${formatMoney(d.saldoPendiente)}</strong>
-              </div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">${escapeHtml(acreedor)}</div>
+              <div class="progress-bar" style="height:4px"><div class="progress-fill ${allPaid?'income':'expense'}" style="width:${progress}%"></div></div>
             </div>
-            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px">
-              <div style="display:flex; gap:6px">
-                <button class="btn-icon" data-edit-debt="${d.id}">${icon('edit', 16)}</button>
-                <button class="btn-icon" data-del-debt="${d.id}">${icon('trash', 16)}</button>
-              </div>
-              ${!isPaid ? `<button class="btn btn-secondary btn-sm" data-pay-debt="${d.id}">${icon('check', 14)} Pagar</button>` : ''}
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:0.7rem;color:var(--text-muted)">Pendiente</div>
+              <div style="font-weight:700;color:${allPaid?'var(--color-success)':'var(--color-expense)'};font-size:0.95rem">${formatMoney(pend)}</div>
+              <div style="font-size:0.65rem;color:var(--text-muted)">${progress}% · ${formatMoney(pagado)}/${formatMoney(total)}</div>
             </div>
           </div>
         </div>
       `;
     };
+
+    const compactDebtHtml = (d) => {
+      const isPaid = d.estado === 'pagada';
+      const isPartial = !isPaid && (parseFloat(d.montoPagado) || 0) > 0;
+      const isOverdue = !isPaid && d.fechaVencimiento && d.fechaVencimiento < today;
+      const total = parseFloat(d.montoTotal) || 0;
+      const pagado = parseFloat(d.montoPagado) || 0;
+      const progress = total > 0 ? Math.round((pagado/total)*100) : 0;
+      const borderColor = isPaid ? 'var(--color-success)' : isOverdue ? 'var(--color-expense)' : isPartial ? 'var(--color-warning)' : 'var(--accent-primary)';
+      const stateBadge = isPaid ? '<span class="badge badge-success" style="font-size:0.62rem;padding:1px 6px">Pagada</span>'
+        : isOverdue ? '<span class="badge badge-danger" style="font-size:0.62rem;padding:1px 6px">Vencida</span>'
+        : isPartial ? '<span class="badge badge-warning" style="font-size:0.62rem;padding:1px 6px">Parcial</span>'
+        : '<span class="badge badge-warning" style="font-size:0.62rem;padding:1px 6px">Pendiente</span>';
+      return `
+        <div class="card debt-card-compact" style="padding:12px 14px;margin-bottom:8px;border-left:3px solid ${borderColor};opacity:${isPaid?0.65:1}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
+                <span style="font-weight:700;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(d.descripcion || '')}</span>
+                ${stateBadge}
+              </div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">${escapeHtml(d.acreedor || '')}${d.fechaVencimiento ? ' · venc ' + formatDate(d.fechaVencimiento) : ''}</div>
+              <div class="progress-bar" style="height:4px"><div class="progress-fill ${isPaid?'income':'expense'}" style="width:${progress}%"></div></div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:0.7rem;color:var(--text-muted)">Pendiente</div>
+              <div style="font-weight:700;color:${isPaid?'var(--color-success)':'var(--color-expense)'};font-size:0.95rem">${formatMoney(d.saldoPendiente)}</div>
+              <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px">
+                ${!isPaid ? `<button class="btn-icon" data-pay-debt="${d.id}" title="Pagar" style="width:24px;height:24px">${icon('check',12)}</button>` : ''}
+                <button class="btn-icon" data-edit-debt="${d.id}" title="Editar" style="width:24px;height:24px">${icon('edit',12)}</button>
+                <button class="btn-icon" data-del-debt="${d.id}" title="Eliminar" style="width:24px;height:24px">${icon('trash',12)}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    // ---------- Datos auxiliares para filtros ----------
+    const acreedoresUnicos = [...new Set(debts.map(d => d.acreedor).filter(Boolean))].sort();
+    const tplsConDeudas = templates.filter(t => debts.some(d => (d.templateId || d.metadata?.templateId) === t.id));
+    const archivadasCount = debts.filter(d => d.estado === 'pagada' && isArchived(d)).length;
 
     return `
-      <div style="background:rgba(239,68,68,0.05); padding:16px; border-radius:12px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; border:1px solid rgba(239,68,68,0.1)">
+      <div style="background:rgba(239,68,68,0.05); padding:14px 18px; border-radius:12px; margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; border:1px solid rgba(239,68,68,0.1)">
         <div>
-          <div style="font-size:0.85rem; color:var(--text-muted)">Total en Compromisos</div>
-          <div style="font-size:1.4rem; font-weight:800; color:var(--color-expense)">${formatMoney(totalPendiente)}</div>
+          <div style="font-size:0.78rem; color:var(--text-muted)">Total en Compromisos</div>
+          <div style="font-size:1.3rem; font-weight:800; color:var(--color-expense)">${formatMoney(totalPendiente)}</div>
         </div>
-        <div style="font-size:1.8rem; filter:grayscale(1)">💸</div>
+        <div style="font-size:1.6rem; filter:grayscale(1)">💸</div>
+      </div>
+
+      <!-- Barra de filtros -->
+      <div class="card" style="padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <input type="text" id="dbt-filter-search" placeholder="Buscar por nombre, acreedor o nota..." class="form-input"
+          value="${escapeAttr(filters.search)}" style="flex:1;min-width:160px" />
+        <select id="dbt-filter-estado" class="form-select" style="min-width:130px">
+          <option value="todas"${filters.estado==='todas'?' selected':''}>Todas activas</option>
+          <option value="pendientes"${filters.estado==='pendientes'?' selected':''}>Pendientes</option>
+          <option value="parciales"${filters.estado==='parciales'?' selected':''}>Parciales</option>
+          <option value="vencidas"${filters.estado==='vencidas'?' selected':''}>Vencidas</option>
+          <option value="pagadas"${filters.estado==='pagadas'?' selected':''}>Pagadas (recientes)</option>
+          <option value="archivadas"${filters.estado==='archivadas'?' selected':''}>Archivadas (${archivadasCount})</option>
+        </select>
+        <select id="dbt-filter-sort" class="form-select" style="min-width:140px">
+          <option value="priority"${filters.sortBy==='priority'?' selected':''}>Orden: prioridad</option>
+          <option value="venc"${filters.sortBy==='venc'?' selected':''}>Fecha vencimiento</option>
+          <option value="ingreso"${filters.sortBy==='ingreso'?' selected':''}>Fecha de ingreso</option>
+          <option value="monto"${filters.sortBy==='monto'?' selected':''}>Monto</option>
+          <option value="acreedor"${filters.sortBy==='acreedor'?' selected':''}>Acreedor</option>
+        </select>
+        ${acreedoresUnicos.length > 0 ? `
+          <select id="dbt-filter-acreedor" class="form-select" style="min-width:130px">
+            <option value="">Todos los acreedores</option>
+            ${acreedoresUnicos.map(a => `<option value="${escapeAttr(a)}"${norm(filters.acreedor)===norm(a)?' selected':''}>${escapeHtml(a)}</option>`).join('')}
+          </select>
+        ` : ''}
+        ${tplsConDeudas.length > 0 ? `
+          <select id="dbt-filter-tpl" class="form-select" style="min-width:130px">
+            <option value="">Todas las plantillas</option>
+            ${tplsConDeudas.map(t => `<option value="${t.id}"${filters.templateId===t.id?' selected':''}>${escapeHtml(t.nombre)}</option>`).join('')}
+          </select>
+        ` : ''}
+        ${(filters.search||filters.estado!=='todas'||filters.acreedor||filters.templateId||filters.sortBy!=='priority') ?
+          `<button id="dbt-filter-reset" class="btn btn-ghost btn-sm">${icon('refresh',12)} Limpiar</button>` : ''}
       </div>
 
       <div class="stagger-children">
-        ${[...groups.values()].map(groupCardHtml).join('')}
-        ${standalone.map(debtCardHtml).join('')}
+        ${sortedGroups.map(compactGroupHtml).join('')}
+        ${standalone.map(compactDebtHtml).join('')}
+        ${(sortedGroups.length === 0 && standalone.length === 0) ? `
+          <div class="empty-state card" style="padding:30px;text-align:center;color:var(--text-muted)">
+            <p style="margin:0">No hay deudas que coincidan con los filtros aplicados.</p>
+          </div>
+        ` : ''}
       </div>
     `;
   }
@@ -596,6 +717,23 @@ export default function renderDebts() {
     page.querySelector('#add-debt-btn')?.addEventListener('click', () => openDebtModal());
     page.querySelector('#add-tpl-btn')?.addEventListener('click', () => openTplModal());
     page.querySelector('#add-loan-btn')?.addEventListener('click', () => openLoanModal());
+
+    // ---------- Filtros ----------
+    let searchTimer = null;
+    page.querySelector('#dbt-filter-search')?.addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      const v = e.target.value;
+      searchTimer = setTimeout(() => { filters.search = v; persistFilters(); render(); }, 250);
+    });
+    page.querySelector('#dbt-filter-estado')?.addEventListener('change', (e) => { filters.estado = e.target.value; persistFilters(); render(); });
+    page.querySelector('#dbt-filter-sort')?.addEventListener('change', (e) => { filters.sortBy = e.target.value; persistFilters(); render(); });
+    page.querySelector('#dbt-filter-acreedor')?.addEventListener('change', (e) => { filters.acreedor = e.target.value; persistFilters(); render(); });
+    page.querySelector('#dbt-filter-tpl')?.addEventListener('change', (e) => { filters.templateId = e.target.value; persistFilters(); render(); });
+    page.querySelector('#dbt-filter-reset')?.addEventListener('click', () => {
+      filters.search = ''; filters.estado = 'todas'; filters.sortBy = 'priority';
+      filters.acreedor = ''; filters.templateId = '';
+      persistFilters(); render();
+    });
 
     // Click en card agrupado -> ver detalle
     page.querySelectorAll('[data-debt-group]').forEach(card => {
@@ -1119,13 +1257,16 @@ export default function renderDebts() {
         notas: notes || `Pago aplicado a ${updates.length} ${updates.length === 1 ? 'registro' : 'registros'}`,
       });
 
-      // 2. Actualizar las deudas afectadas
+      // 2. Actualizar las deudas afectadas — guarda paidAt para auto-archive
+      const nowIso = new Date().toISOString();
       updates.forEach(u => {
-        store.update('debts', u.id, {
+        const patch = {
           montoPagado: u.montoPagado,
           saldoPendiente: u.saldoPendiente,
           estado: u.estado,
-        });
+        };
+        if (u.estado === 'pagada') patch.paidAt = nowIso;
+        store.update('debts', u.id, patch);
       });
 
       const totalRecords = updates.length;
