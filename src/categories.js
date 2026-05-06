@@ -31,21 +31,38 @@ const DEFAULT_CATEGORIES = [
   { id: 'cat_tithe', nombre: 'Diezmo/10%', icono: '❤️', color: '#e91e63', tipo: 'gasto', esSistema: true },
 ];
 
+// Normaliza nombres para matchear sin importar tildes/mayusculas
+function normName(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
 export function initCategories() {
   const existing = store.getAll('categories');
-  if (existing.length === 0) {
-    store.save('categories', DEFAULT_CATEGORIES.map(c => ({ ...c, createdAt: new Date().toISOString() })));
-  } else {
-    // Inject any missing system categories (for users upgrading version)
-    let updated = false;
+
+  // Backend modo: si ya hay categorias (probablemente con UUID real),
+  // NO inyectamos los hardcoded `cat_xxx` porque romperian las queries
+  // (Postgres rechaza esos ids en columnas UUID y la unique constraint
+  //  workspace_id+nombre rechaza creates duplicados).
+  if (existing.length > 0) {
+    // Solo agregamos categorias por NOMBRE que no existan, dejando que
+    // el backend asigne sus UUIDs. Nunca pasamos `id: cat_xxx`.
+    const existingNames = new Set(existing.map(c => normName(c.nombre)));
     DEFAULT_CATEGORIES.forEach(dc => {
-      if (!existing.find(c => c.id === dc.id)) {
-        existing.push({ ...dc, createdAt: new Date().toISOString() });
-        updated = true;
+      if (!existingNames.has(normName(dc.nombre))) {
+        // store.add genera un UUID automaticamente y omite el `id` hardcoded.
+        const { id: _drop, ...rest } = dc;
+        store.add('categories', rest);
       }
     });
-    if (updated) store.save('categories', existing);
+    return;
   }
+
+  // Modo offline / sin backend: poblar el cache con los DEFAULT_CATEGORIES.
+  // Estos sirven como placeholder hasta que se sincronice con el servidor.
+  store.save('categories', DEFAULT_CATEGORIES.map(c => ({
+    ...c,
+    createdAt: new Date().toISOString(),
+  })));
 }
 
 export function getCategories(tipo = null) {
