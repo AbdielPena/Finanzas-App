@@ -334,6 +334,21 @@ export default function renderDebts() {
   };
 
   function renderActivasTab(debts) {
+    try {
+      return _renderActivasTabInner(debts);
+    } catch (err) {
+      console.error('[debts] error renderizando tab Activas:', err);
+      return `
+        <div class="empty-state card" style="padding:30px;text-align:center">
+          <h3>No se pudo renderizar el listado</h3>
+          <p style="color:var(--text-muted);font-size:0.85rem;margin:6px 0">${escapeHtml(err?.message || String(err))}</p>
+          <button class="btn btn-secondary btn-sm" onclick="location.reload()">Recargar pagina</button>
+        </div>
+      `;
+    }
+  }
+
+  function _renderActivasTabInner(debts) {
     if (debts.length === 0) {
       return `
         <div class="empty-state card">
