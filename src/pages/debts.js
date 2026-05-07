@@ -350,6 +350,21 @@ export default function renderDebts() {
 
   function _renderActivasTabInner(debts, templates) {
     templates = Array.isArray(templates) ? templates : [];
+
+    // Filtrar deudas "fantasma" — registros con monto 0 que se quedaron en
+    // 'pagada' por bugs viejos (intentos de save fallidos, imports rotos,
+    // schema desalineado en versiones anteriores). No tienen utilidad y
+    // ensucian el listado. Las dejamos disponibles via filtro 'archivadas'
+    // por si el usuario quiere recuperar info, pero por default fuera.
+    debts = debts.filter(d => {
+      const total = parseFloat(d.montoTotal) || parseFloat(d.montoOriginal) || 0;
+      const pagado = parseFloat(d.montoPagado) || 0;
+      const pendiente = parseFloat(d.saldoPendiente) || 0;
+      // Ghost: total y pagado y pendiente todos en 0 -> sin valor financiero
+      if (total === 0 && pagado === 0 && pendiente === 0) return false;
+      return true;
+    });
+
     if (debts.length === 0) {
       return `
         <div class="empty-state card">

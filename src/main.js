@@ -740,6 +740,34 @@ function showApp() {
     store.on(col, () => router.refresh());
   });
 
+  // ---------- Sincronizacion cross-device (web <-> Windows <-> Android) ----------
+  // El cache es optimista local. Para que un cambio hecho en la web aparezca
+  // automaticamente en el Tauri/APK abierto al mismo tiempo, re-bootstrapeamos
+  // del backend periodicamente y al volver el foco a la ventana.
+  let _resyncInFlight = false;
+  async function resyncFromBackend() {
+    if (_resyncInFlight) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    if (document.hidden) return;
+    _resyncInFlight = true;
+    try {
+      await store.bootstrap();
+      router.refresh();
+    } catch (e) {
+      // En offline o token expirado, dejamos que la siguiente request reintente
+      console.debug('[resync] fallo silencioso:', e?.message || e);
+    } finally {
+      _resyncInFlight = false;
+    }
+  }
+  // Polling cada 30s mientras la ventana esté activa
+  setInterval(() => { if (!document.hidden) resyncFromBackend(); }, 30_000);
+  // Al recuperar foco (cambiar de pestaña/app y volver) refresh inmediato
+  window.addEventListener('focus', () => resyncFromBackend());
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) resyncFromBackend();
+  });
+
   // Init AI Chat (FAB + Drawer)
   initAIChat();
 
