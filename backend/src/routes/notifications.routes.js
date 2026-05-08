@@ -67,6 +67,14 @@ router.post('/trigger-alerts', async (req, res, next) => {
   try {
     const wsId = req.headers['x-workspace-id'];
     if (!wsId) throw new HttpError(400, 'Falta X-Workspace-Id');
+    // Verifica que el usuario pertenezca al workspace antes de disparar
+    // alertas para ese tenant. Sin esto cualquier user autenticado podia
+    // forzar el envio de notificaciones de cualquier workspace.
+    const m = await query(
+      `SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 LIMIT 1`,
+      [wsId, req.user.id]
+    );
+    if (m.rowCount === 0) throw new HttpError(403, 'No eres miembro de este workspace');
     await generateAlertsForWorkspace(wsId);
     res.json({ ok: true });
   } catch (e) { next(e); }

@@ -100,9 +100,21 @@ router.get('/:id/members', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Helper: garantiza que el usuario sea miembro del workspace antes de
+// leer/escribir cualquier dato. Sin esto cualquier user autenticado podia
+// hacer IDOR sobre /workspaces/:id/settings de otro tenant.
+async function requireWorkspaceMembership(req) {
+  const m = await query(
+    `SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 LIMIT 1`,
+    [req.params.id, req.user.id]
+  );
+  if (m.rowCount === 0) throw new HttpError(403, 'No eres miembro de este workspace');
+}
+
 // ---------- GET /workspaces/:id/settings ----------
 router.get('/:id/settings', async (req, res, next) => {
   try {
+    await requireWorkspaceMembership(req);
     const r = await query(`SELECT data FROM workspace_settings WHERE workspace_id = $1`, [req.params.id]);
     res.json({ data: r.rows[0]?.data || {} });
   } catch (e) { next(e); }
@@ -111,6 +123,7 @@ router.get('/:id/settings', async (req, res, next) => {
 // ---------- PUT /workspaces/:id/settings ----------
 router.put('/:id/settings', async (req, res, next) => {
   try {
+    await requireWorkspaceMembership(req);
     const data = req.body || {};
     await query(
       `INSERT INTO workspace_settings (workspace_id, data) VALUES ($1, $2)

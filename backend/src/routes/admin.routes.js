@@ -68,8 +68,10 @@ router.patch('/users/:id/status', async (req, res, next) => {
 router.post('/users/:id/force-reset-password', async (req, res, next) => {
   try {
     const { newPassword, requireChange } = req.body || {};
-    if (!newPassword || newPassword.length < 6) {
-      throw new HttpError(400, 'La contrasena debe tener al menos 6 caracteres');
+    // Coincide con el minimo del registro normal (auth.routes.js usa 8).
+    // Antes admite 6 lo cual rompia la regla de robustez.
+    if (!newPassword || newPassword.length < 8) {
+      throw new HttpError(400, 'La contrasena debe tener al menos 8 caracteres');
     }
     const argonMod = await import('argon2');
     const argon2 = argonMod.default || argonMod;

@@ -360,6 +360,11 @@ export default function renderExternalCards() {
   }
 
   render();
-  store.on('external_cards', render); // bind logic to rerender when background changes
+  // Re-renderiza cuando cambia la cache. Auto-unsubscribe al desmontar el
+  // nodo de la pagina para evitar listeners acumulados con cada navegacion.
+  const offExt = store.on('external_cards', () => {
+    if (!document.body.contains(page)) { offExt(); return; }
+    render();
+  });
   return page;
 }

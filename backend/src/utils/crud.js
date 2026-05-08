@@ -14,6 +14,10 @@ import { query } from '../config/db.js';
 import { HttpError } from '../middleware/errorHandler.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Whitelist defensiva para listOrderBy. Aunque el valor viene de config interna
+// (no de req.body), sanitizamos por seguridad: solo permite "<col> ASC|DESC"
+// separados por coma.
+const ORDER_BY_RE = /^[a-z_]+\s+(ASC|DESC)(\s*,\s*[a-z_]+\s+(ASC|DESC))*$/i;
 
 export function makeCrud({
   table,
@@ -28,6 +32,11 @@ export function makeCrud({
   scopeFromReq = (req) => req.workspaceId,
   extraListFilters,// async (req, where, params) => { where, params }
 }) {
+  // Falla rapido si la config trae un orderBy raro — evita ejecutar SQL
+  // arbitrario si alguien futuro pone una entidad con orderBy mal copiado.
+  if (!ORDER_BY_RE.test(listOrderBy)) {
+    throw new Error(`makeCrud: listOrderBy invalido para tabla ${table}: "${listOrderBy}"`);
+  }
   const router = Router();
 
   // ---------- GET / (list, paginated) ----------

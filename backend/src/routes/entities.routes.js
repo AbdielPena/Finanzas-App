@@ -31,28 +31,35 @@ const ENTITIES = [
   { path: 'transactions',    table: 'transactions', orderBy: 'fecha DESC, created_at DESC',
     fields: ['tipo','monto','descripcion','fecha','categoria_id','cuenta_id','cuenta_destino_id','tarjeta_id','tipo_ingreso','cliente_asociado','aplica_diezmo','estado','notas','beneficiarios'],
     extraFilters: async (req, where, params) => {
-      // Soporta filtros por cuentaId / tarjetaId / categoriaId / fechaDesde / fechaHasta
-      if (req.query.cuentaId) {
+      // Helpers de validacion de input (defensivas; los parametros van por
+      // bind, pero un valor mal formado puede igual hacer fallar el query
+      // con un mensaje confuso).
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const isUuid = (v) => typeof v === 'string' && UUID_RE.test(v);
+      const isDate = (v) => typeof v === 'string' && DATE_RE.test(v);
+
+      if (req.query.cuentaId && isUuid(req.query.cuentaId)) {
         params.push(req.query.cuentaId);
         where += ` AND (cuenta_id = $${params.length} OR cuenta_destino_id = $${params.length})`;
       }
-      if (req.query.tarjetaId) {
+      if (req.query.tarjetaId && isUuid(req.query.tarjetaId)) {
         params.push(req.query.tarjetaId);
         where += ` AND tarjeta_id = $${params.length}`;
       }
-      if (req.query.categoriaId) {
+      if (req.query.categoriaId && isUuid(req.query.categoriaId)) {
         params.push(req.query.categoriaId);
         where += ` AND categoria_id = $${params.length}`;
       }
-      if (req.query.tipo) {
+      if (req.query.tipo && ['ingreso','gasto','transferencia'].includes(req.query.tipo)) {
         params.push(req.query.tipo);
         where += ` AND tipo = $${params.length}`;
       }
-      if (req.query.fechaDesde) {
+      if (req.query.fechaDesde && isDate(req.query.fechaDesde)) {
         params.push(req.query.fechaDesde);
         where += ` AND fecha >= $${params.length}`;
       }
-      if (req.query.fechaHasta) {
+      if (req.query.fechaHasta && isDate(req.query.fechaHasta)) {
         params.push(req.query.fechaHasta);
         where += ` AND fecha <= $${params.length}`;
       }
