@@ -24,6 +24,7 @@ import renderSecurity from './pages/security.js';
 import renderCategories from './pages/categories.js';
 import renderSettings from './pages/settings.js';
 import renderNotes from './pages/notes.js';
+import renderTrash from './pages/trash.js';
 import renderExternalCards from './pages/external_cards.js';
 import renderUsers from './pages/users.js';
 import renderSuperAdmin from './pages/superadmin.js';
@@ -271,6 +272,10 @@ function showApp() {
               <button class="nav-item" data-route="/notes">
                 ${icon('fileText', 20)}
                 <span class="nav-item-label">Notas</span>
+              </button>
+              <button class="nav-item" data-route="/trash">
+                ${icon('trash', 20)}
+                <span class="nav-item-label">Papelera</span>
               </button>
               ${can('manageUsers') ? `
               <button class="nav-item" data-route="/users">
@@ -707,6 +712,7 @@ function showApp() {
   router.register('/categories', renderCategories);
   router.register('/settings', can('viewSettings') ? renderSettings : () => { const d = document.createElement('div'); d.className='page-content'; d.innerHTML='<div class="empty-state card"><h3>Acceso restringido</h3><p>No tienes permisos para ver la configuración.</p></div>'; return d; });
   router.register('/notes', renderNotes);
+  router.register('/trash', renderTrash);
   router.register('/external_cards', renderExternalCards);
   router.register('/users', can('manageUsers') ? renderUsers : () => { const d = document.createElement('div'); d.className='page-content'; d.innerHTML='<div class="empty-state card"><h3>Acceso restringido</h3><p>Solo el administrador puede gestionar usuarios.</p></div>'; return d; });
   router.register('/superadmin', currentUser?.isSuperAdmin ? renderSuperAdmin : () => { const d = document.createElement('div'); d.className='page-content'; d.innerHTML='<div class="empty-state card"><h3>Acceso denegado</h3><p>Requiere privilegios de Super Administrador.</p></div>'; return d; });

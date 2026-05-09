@@ -220,6 +220,20 @@ export const workspaces = {
   saveSettings(id, data) { return request('PUT', `/workspaces/${id}/settings`, { body: data }); },
 };
 
+// ---------- Trash ----------
+// Papelera global: items soft-deleted del workspace, restore por entidad,
+// vaciar todo. Cada entidad ya tiene su POST /<resource>/:id/restore via
+// el factory; aqui solo el inventario global.
+export const trash = {
+  list()              { return request('GET', '/trash'); },
+  count()             { return request('GET', '/trash/count'); },
+  empty()             { return request('DELETE', '/trash'); },
+  // Restore de un item especifico de cualquier resource
+  restore(resourcePath, id) { return request('POST', `/${resourcePath}/${id}/restore`); },
+  // Borrado fisico (vaciar 1 item de la papelera)
+  hardDelete(resourcePath, id) { return request('DELETE', `/${resourcePath}/${id}?hard=1`); },
+};
+
 // ---------- Resource factory ----------
 // Algunas tablas (debts, debt_templates) tienen un esquema mas estrecho
 // que lo que la app necesita. Usamos columnas JSONB como "bolsa" para
@@ -374,5 +388,5 @@ export default {
   beneficiaries, transactions, subscriptions, subscriptionCharges,
   debts, debtPayments, debtTemplates, loans, loanPayments,
   receivables, payables, goals, goalContributions, tithe,
-  notes, notifications, notificationPrefs, admin, ApiError, tokens, workspace,
+  notes, notifications, notificationPrefs, admin, trash, ApiError, tokens, workspace,
 };

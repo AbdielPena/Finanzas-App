@@ -3,6 +3,7 @@
 // ============================================================
 import cron from 'node-cron';
 import { runScheduledAlertsJob, runDailySummaryJob } from './notifications.service.js';
+import { purgeOldTrash } from './trash.service.js';
 import { config } from '../config/env.js';
 
 let started = false;
@@ -24,7 +25,13 @@ export function startScheduler() {
     catch (e) { console.error('[cron-summary]', e.message); }
   }, { timezone: 'America/Santo_Domingo' });
 
-  console.log('[scheduler] iniciado (alertas cada hora, resumen 7am AST)');
+  // Cada dia a las 3am hora local: purga items con > 30 dias en papelera
+  cron.schedule('0 3 * * *', async () => {
+    try { await purgeOldTrash(); }
+    catch (e) { console.error('[cron-trash-purge]', e.message); }
+  }, { timezone: 'America/Santo_Domingo' });
+
+  console.log('[scheduler] iniciado (alertas cada hora, resumen 7am AST, papelera 3am AST)');
 
   // Opcional: corre una pasada inicial para popular notificaciones a los 30s del start
   setTimeout(() => {

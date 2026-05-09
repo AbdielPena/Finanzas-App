@@ -31,6 +31,10 @@ export function makeCrud({
   scopeColumn = 'workspace_id',
   scopeFromReq = (req) => req.workspaceId,
   extraListFilters,// async (req, where, params) => { where, params }
+  // Si la tabla soporta soft-delete (columna deleted_at), DELETE marca
+  // deleted_at en lugar de borrar. Default true; entidades que no la
+  // tengan pueden pasar softDelete: false.
+  softDelete = true,
 }) {
   // Falla rapido si la config trae un orderBy raro — evita ejecutar SQL
   // arbitrario si alguien futuro pone una entidad con orderBy mal copiado.
@@ -51,6 +55,15 @@ export function makeCrud({
 
       let where = `WHERE ${scopeColumn} = $1`;
       let params = [wsId];
+
+      // Por default ocultamos rows con deleted_at (estan en la papelera).
+      // Si el cliente quiere ver papelera explicitamente: ?trash=1
+      const wantsTrash = req.query.trash === '1' || req.query.trash === 'true';
+      if (softDelete) {
+        where += wantsTrash
+          ? ' AND deleted_at IS NOT NULL'
+          : ' AND deleted_at IS NULL';
+      }
 
       if (extraListFilters) {
         const r = await extraListFilters(req, where, params);
@@ -147,10 +160,27 @@ export function makeCrud({
   });
 
   // ---------- DELETE /:id ----------
+  // Si softDelete = true (default): marca deleted_at = NOW(). El row queda
+  // visible solo en la papelera (?trash=1) y se purga del todo despues de
+  // 30 dias via cron.
+  // Si softDelete = false: borrado fisico inmediato (comportamiento legacy).
   router.delete('/:id', async (req, res, next) => {
     try {
       const wsId = scopeFromReq(req);
       if (!UUID_RE.test(req.params.id)) throw new HttpError(400, 'ID invalido');
+
+      // Modo papelera explicito: ?hard=1 fuerza borrado fisico aun con
+      // softDelete activo (para "vaciar papelera" desde la UI).
+      const hard = req.query.hard === '1' || req.query.hard === 'true';
+      if (softDelete && !hard) {
+        const r = await query(
+          `UPDATE ${table} SET deleted_at = NOW() WHERE id = $1 AND ${scopeColumn} = $2 AND deleted_at IS NULL RETURNING *`,
+          [req.params.id, wsId]
+        );
+        if (r.rowCount === 0) throw new HttpError(404, `${table} no encontrado o ya en papelera`);
+        if (afterRemove) await afterRemove(r.rows[0], req);
+        return res.json({ ok: true, deleted: r.rows[0].id, soft: true });
+      }
 
       const r = await query(
         `DELETE FROM ${table} WHERE id = $1 AND ${scopeColumn} = $2 RETURNING *`,
@@ -158,9 +188,26 @@ export function makeCrud({
       );
       if (r.rowCount === 0) throw new HttpError(404, `${table} no encontrado`);
       if (afterRemove) await afterRemove(r.rows[0], req);
-      res.json({ ok: true, deleted: r.rows[0].id });
+      res.json({ ok: true, deleted: r.rows[0].id, soft: false });
     } catch (e) { next(e); }
   });
+
+  // ---------- POST /:id/restore ----------
+  // Saca un row de la papelera (deleted_at = NULL).
+  if (softDelete) {
+    router.post('/:id/restore', async (req, res, next) => {
+      try {
+        const wsId = scopeFromReq(req);
+        if (!UUID_RE.test(req.params.id)) throw new HttpError(400, 'ID invalido');
+        const r = await query(
+          `UPDATE ${table} SET deleted_at = NULL WHERE id = $1 AND ${scopeColumn} = $2 AND deleted_at IS NOT NULL RETURNING *`,
+          [req.params.id, wsId]
+        );
+        if (r.rowCount === 0) throw new HttpError(404, `${table} no encontrado en papelera`);
+        res.json({ data: r.rows[0] });
+      } catch (e) { next(e); }
+    });
+  }
 
   return router;
 }

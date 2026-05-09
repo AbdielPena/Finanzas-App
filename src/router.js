@@ -133,6 +133,7 @@ class Router {
       '/goals': ['Metas Financieras', 'Objetivos de ahorro'],
       '/tithe': ['Cálculo de ingresos por porcentaje', 'Configura tu porcentaje de ahorro/diezmo'],
       '/notifications': ['Notificaciones', 'Centro de alertas'],
+      '/trash': ['Papelera', 'Items eliminados — auto-purga a los 30 días'],
       '/categories': ['Categorías', 'Categorías personalizadas'],
       '/settings': ['Configuración', 'Preferencias de la aplicación'],
     };

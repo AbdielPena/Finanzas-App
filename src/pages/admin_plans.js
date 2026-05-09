@@ -50,7 +50,7 @@ export default function renderAdminPlans() {
           <p>Administra catálogo, precios, límites y asignaciones.</p>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-primary" id="btn-new-plan">
+          <button class="btn btn-primary" data-action="new-plan">
             ${icon('plus', 16)}<span>Nuevo plan</span>
           </button>
         </div>
@@ -69,7 +69,8 @@ export default function renderAdminPlans() {
     `;
 
     renderTab();
-    bindHeader();
+    // No re-bindeamos listeners aqui — usamos un solo listener delegado
+    // (vease bindOnce() abajo) que se engancha UNA SOLA VEZ a `page`.
   };
 
   const renderTab = () => {
@@ -77,7 +78,8 @@ export default function renderAdminPlans() {
     if (!host) return;
     if (currentTab === 'catalog') host.innerHTML = renderCatalogTab();
     else host.innerHTML = renderAssignmentsTab();
-    bindTabEvents();
+    // Sin re-binding: el listener delegado de bindOnce() captura los nuevos
+    // botones automaticamente porque escucha en el contenedor padre.
   };
 
   const renderCatalogTab = () => {
@@ -182,59 +184,64 @@ export default function renderAdminPlans() {
     `;
   };
 
-  const bindHeader = () => {
-    page.querySelector('#btn-new-plan')?.addEventListener('click', () => openPlanEditor(null));
-    page.querySelectorAll('.chip[data-tab]').forEach(el => {
-      el.addEventListener('click', () => {
-        currentTab = el.dataset.tab;
-        render();
-      });
-    });
-  };
+  // ---------- Event delegation ----------
+  // Un SOLO listener de click en `page` captura todas las acciones.
+  // Esto evita la duplicacion de handlers que ocurria al re-renderizar:
+  // antes cada render() volvia a hacer addEventListener sobre los mismos
+  // elementos sin remover los anteriores -> click disparaba dos veces.
+  const bindOnce = () => {
+    page.addEventListener('click', async (e) => {
+      const target = e.target.closest('[data-action], [data-tab]');
+      if (!target) return;
 
-  const bindTabEvents = () => {
-    // Catalog actions
-    page.querySelectorAll('[data-action="edit"]').forEach(b => {
-      b.addEventListener('click', () => openPlanEditor(b.dataset.id));
-    });
-    page.querySelectorAll('[data-action="toggle"]').forEach(b => {
-      b.addEventListener('click', () => {
-        togglePlanStatus(b.dataset.id);
+      // Tabs
+      if (target.matches('[data-tab]')) {
+        currentTab = target.dataset.tab;
+        render();
+        return;
+      }
+
+      const action = target.dataset.action;
+      const id = target.dataset.id;
+      const userId = target.dataset.user;
+
+      if (action === 'new-plan') {
+        openPlanEditor(null);
+      } else if (action === 'edit') {
+        openPlanEditor(id);
+      } else if (action === 'toggle') {
+        togglePlanStatus(id);
         showToast('success', 'Estado actualizado');
         render();
-      });
-    });
-    page.querySelectorAll('[data-action="delete"]').forEach(b => {
-      b.addEventListener('click', async () => {
+      } else if (action === 'delete') {
         const ok = await confirmDialog('¿Eliminar plan?', 'Si hay usuarios asignados se desactivará en lugar de borrarse.');
         if (!ok) return;
-        const res = deletePlan(b.dataset.id);
+        const res = deletePlan(id);
         if (res.deactivated) showToast('info', 'Plan desactivado', `${res.affectedUsers} usuarios afectados.`);
         else if (res.deleted) showToast('success', 'Plan eliminado');
         render();
-      });
-    });
-    // Assignment change
-    page.querySelectorAll('.assignment-plan-select').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const userId = sel.dataset.user;
-        const planId = sel.value;
-        if (!planId) {
-          removeUserAssignment(userId);
-          showToast('info', 'Asignación removida');
-        } else {
-          assignPlanToUser(userId, planId);
-          showToast('success', 'Plan asignado');
-        }
-        render();
-      });
-    });
-    page.querySelectorAll('[data-action="unassign"]').forEach(b => {
-      b.addEventListener('click', () => {
-        removeUserAssignment(b.dataset.user);
+      } else if (action === 'unassign') {
+        removeUserAssignment(userId);
         showToast('info', 'Asignación removida');
         render();
-      });
+      }
+    });
+
+    // Listener delegado para selects de asignacion (event 'change' no bubblea
+    // automaticamente en versiones viejas, pero los modernos si)
+    page.addEventListener('change', (e) => {
+      const sel = e.target.closest('.assignment-plan-select');
+      if (!sel) return;
+      const userId = sel.dataset.user;
+      const planId = sel.value;
+      if (!planId) {
+        removeUserAssignment(userId);
+        showToast('info', 'Asignación removida');
+      } else {
+        assignPlanToUser(userId, planId);
+        showToast('success', 'Plan asignado');
+      }
+      render();
     });
   };
 
@@ -409,6 +416,7 @@ export default function renderAdminPlans() {
 
   const escape = (s) => String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
+  bindOnce(); // engancha listener delegado UNA sola vez
   render();
   return page;
 }

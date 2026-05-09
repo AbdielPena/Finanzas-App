@@ -15,6 +15,7 @@ import authRoutes from './routes/auth.routes.js';
 import workspacesRoutes from './routes/workspaces.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
+import trashRoutes from './routes/trash.routes.js';
 import { mountEntities } from './routes/entities.routes.js';
 import { startScheduler } from './services/scheduler.service.js';
 import { runStartupMigrations } from './config/auto-migrate.js';
@@ -62,6 +63,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/workspaces', workspacesRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/v1/trash', trashRoutes);
 
 // CRUD generico para 21 entidades de negocio
 mountEntities(app);
