@@ -732,18 +732,17 @@ function showApp() {
   // Init router
   router.init('page-content');
 
-  // Auto-refresh de la pagina actual cuando cambian datos relevantes para el
-  // balance/UI. Esto cubre el caso del dashboard que no tiene render() propio
-  // y se quedaba con valores stale despues de una mutacion (ej: balance de
-  // cuenta sin actualizar tras pago de grupo de deudas).
-  ['transactions','accounts','cards','external_cards','debts','debt_payments','loans','loan_payments','subscriptions','goals','goal_contributions'].forEach((col) => {
-    store.on(col, () => router.refresh());
+  // ---------- Auto-refresh + sync handlers (con cleanup en logout) ----------
+  // Antes estos listeners + intervals quedaban "huerfanos" tras un logout —
+  // se acumulaban en cada login fresh y consumian recursos en background.
+  // Ahora los registramos en window.__finanzappCleanup para tearDown explicito.
+  const cleanupRefs = [];
+  const _refreshCols = ['transactions','accounts','cards','external_cards','debts','debt_payments','loans','loan_payments','subscriptions','goals','goal_contributions'];
+  _refreshCols.forEach((col) => {
+    const off = store.on(col, () => router.refresh());
+    cleanupRefs.push(off);
   });
 
-  // ---------- Sincronizacion cross-device (web <-> Windows <-> Android) ----------
-  // El cache es optimista local. Para que un cambio hecho en la web aparezca
-  // automaticamente en el Tauri/APK abierto al mismo tiempo, re-bootstrapeamos
-  // del backend periodicamente y al volver el foco a la ventana.
   let _resyncInFlight = false;
   async function resyncFromBackend() {
     if (_resyncInFlight) return;
@@ -754,27 +753,35 @@ function showApp() {
       await store.bootstrap();
       router.refresh();
     } catch (e) {
-      // En offline o token expirado, dejamos que la siguiente request reintente
       console.debug('[resync] fallo silencioso:', e?.message || e);
     } finally {
       _resyncInFlight = false;
     }
   }
-  // Polling cada 30s mientras la ventana esté activa
-  setInterval(() => { if (!document.hidden) resyncFromBackend(); }, 30_000);
-  // Al recuperar foco (cambiar de pestaña/app y volver) refresh inmediato
-  window.addEventListener('focus', () => resyncFromBackend());
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) resyncFromBackend();
+  const _resyncInterval = setInterval(() => { if (!document.hidden) resyncFromBackend(); }, 30_000);
+  cleanupRefs.push(() => clearInterval(_resyncInterval));
+
+  const _onFocus = () => resyncFromBackend();
+  const _onVisibility = () => { if (!document.hidden) resyncFromBackend(); };
+  window.addEventListener('focus', _onFocus);
+  document.addEventListener('visibilitychange', _onVisibility);
+  cleanupRefs.push(() => {
+    window.removeEventListener('focus', _onFocus);
+    document.removeEventListener('visibilitychange', _onVisibility);
   });
 
   // Init AI Chat (FAB + Drawer)
   initAIChat();
 
-  // Update notification badge periodically
-  setInterval(() => {
-    updateNotifBadge();
-  }, 60000);
+  // Update notification badge periodically (limpiable en logout)
+  const _notifBadgeInterval = setInterval(() => { updateNotifBadge(); }, 60000);
+  cleanupRefs.push(() => clearInterval(_notifBadgeInterval));
+
+  // Expone teardown global. logout() lo llama si esta presente.
+  window.__finanzappCleanup = () => {
+    cleanupRefs.forEach((fn) => { try { fn(); } catch {} });
+    cleanupRefs.length = 0;
+  };
 }
 
 // Start app when DOM is ready

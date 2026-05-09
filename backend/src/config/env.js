@@ -25,6 +25,9 @@ const dbUrlKey = k(['DATABASE', 'URL']);
 
 export const config = {
   nodeEnv: e.NODE_ENV || 'development',
+  // Flag explicito para exponer detalles de error al cliente (stack, pg msg).
+  // Default false; activar SOLO en debugging puntual con EXPOSE_ERRORS=1.
+  exposeErrors: e.EXPOSE_ERRORS === '1' || e.EXPOSE_ERRORS === 'true',
   port: parseInt(e.PORT, 10) || 4000,
   appName: e.APP_NAME || 'FinanzApp',
   appUrl: e.APP_URL || 'http://localhost:5173',

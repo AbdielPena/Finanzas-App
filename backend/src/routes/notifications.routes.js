@@ -2,6 +2,7 @@
 // Notifications routes — preferencias y triggers manuales
 // ============================================================
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { query } from '../config/db.js';
 import { authRequired } from '../middleware/auth.js';
 import { HttpError } from '../middleware/errorHandler.js';
@@ -13,6 +14,18 @@ import { sendPushTo, isPushAvailable } from '../services/push.service.js';
 
 const router = Router();
 router.use(authRequired);
+
+// Rate limit per-user para los endpoints que envian email/push.
+// Sin esto un user (o un script malicioso con su token) podia spammear
+// a si mismo o saturar SMTP/FCM con miles de requests.
+const sendLimiter = rateLimit({
+  windowMs: 60_000,            // 1 minuto
+  max: 10,                     // hasta 10 envios por minuto por usuario
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limit_exceeded' },
+  keyGenerator: (req) => req.user?.id || req.ip,
+});
 
 const PREF_FIELDS = [
   'email_enabled', 'push_enabled', 'in_app_enabled',
@@ -63,7 +76,7 @@ router.patch('/preferences', async (req, res, next) => {
 });
 
 // ---------- POST /notification/trigger-alerts (manual scan) ----------
-router.post('/trigger-alerts', async (req, res, next) => {
+router.post('/trigger-alerts', sendLimiter, async (req, res, next) => {
   try {
     const wsId = req.headers['x-workspace-id'];
     if (!wsId) throw new HttpError(400, 'Falta X-Workspace-Id');
@@ -81,7 +94,7 @@ router.post('/trigger-alerts', async (req, res, next) => {
 });
 
 // ---------- POST /notification/send-summary (manual) ----------
-router.post('/send-summary', async (req, res, next) => {
+router.post('/send-summary', sendLimiter, async (req, res, next) => {
   try {
     await sendDailySummaryFor(req.user.id);
     res.json({ ok: true, message: 'Resumen enviado a tu email' });
@@ -89,7 +102,7 @@ router.post('/send-summary', async (req, res, next) => {
 });
 
 // ---------- POST /notifications/test-push (envia un push al device del usuario) ----------
-router.post('/test-push', async (req, res, next) => {
+router.post('/test-push', sendLimiter, async (req, res, next) => {
   try {
     const available = await isPushAvailable();
     if (!available) {

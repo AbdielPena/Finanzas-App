@@ -35,18 +35,27 @@ export function errorHandler(err, req, res, next) { // eslint-disable-line
     });
   }
 
+  // Decide si exponemos detalles internos al cliente. Antes dependiamos
+  // SOLO de NODE_ENV !== 'production', lo que era frágil: una variable
+  // de entorno mal configurada en cPanel podia leak stack traces a
+  // produccion. Ahora cualquiera de los dos basta para exponer:
+  //   - explicito: EXPOSE_ERRORS=1
+  //   - default:   nodeEnv === 'development' o 'test'
+  const exposeErrors = config.exposeErrors === true
+    || ['development', 'test'].includes(config.nodeEnv);
+
   // Errores de PostgreSQL
   if (err?.code && /^[0-9A-Z]{5}$/.test(err.code)) {
     console.error('[pg-error]', err.code, err.message);
     return res.status(500).json({
       error: 'database_error',
-      ...(config.nodeEnv !== 'production' && { details: err.message }),
+      ...(exposeErrors && { details: err.message }),
     });
   }
 
   console.error('[unhandled]', err);
   res.status(500).json({
     error: 'internal_server_error',
-    ...(config.nodeEnv !== 'production' && { stack: err.stack }),
+    ...(exposeErrors && { stack: err.stack }),
   });
 }

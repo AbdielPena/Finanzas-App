@@ -148,6 +148,8 @@ export function logout() {
   // Limpia tokens y workspace ya (no esperar a la API)
   try { tokens.clear(); } catch {}
   try { wsCtx.clear(); } catch {}
+  // Tearing down listeners e intervals registrados por main.js (si existen)
+  try { window.__finanzappCleanup?.(); } catch {}
   // Llama API logout en background (fire-and-forget)
   api.auth.logout().catch(() => {});
   // Limpia tambien posible cache legacy
