@@ -7,8 +7,13 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import healthRoutes from './routes/health.routes.js';
 import authRoutes from './routes/auth.routes.js';
@@ -16,6 +21,7 @@ import workspacesRoutes from './routes/workspaces.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import trashRoutes from './routes/trash.routes.js';
+import hubRoutes from './routes/hub.routes.js';
 import { mountEntities } from './routes/entities.routes.js';
 import { startScheduler } from './services/scheduler.service.js';
 import { runStartupMigrations } from './config/auto-migrate.js';
@@ -64,9 +70,23 @@ app.use('/api/v1/workspaces', workspacesRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/trash', trashRoutes);
+app.use('/api/v1/hub', hubRoutes);
 
 // CRUD generico para 21 entidades de negocio
 mountEntities(app);
+
+// ---------- Frontend SPA estatico (solo en produccion) ----------
+// Sirve el bundle generado por `npm run build` (Vite -> dist/). En el mismo
+// proceso/puerto que la API, asi un solo subdomain (fi.abbypixel.com) sirve
+// ambos. /api/v1/* siempre matchea primero porque esta montado arriba.
+if (config.nodeEnv === 'production') {
+  const distPath = path.resolve(__dirname, '../../dist');
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health')) return next();
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // Inicia cron jobs (alertas + resumen diario)
 startScheduler();

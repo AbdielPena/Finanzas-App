@@ -501,9 +501,11 @@ export default function renderTransactions() {
             <div>
               <div class="cell-primary">
                 ${isTransfer ? '<span style="color:var(--color-info);margin-right:4px">⇄</span>' : ''}
-                ${tx.descripcion} 
+                ${tx.descripcion}
                 ${isTransfer ? '<span class="badge badge-info" style="font-size:0.6rem;margin-left:5px">Movimiento Interno</span>' : ''}
                 ${incomeEmoji}
+                ${tx.is_business || tx.isBusiness ? '<span style="background:rgba(124,58,237,0.15);color:#7C3AED;font-size:0.6rem;font-weight:700;padding:1px 6px;border-radius:6px;margin-left:5px;letter-spacing:0.3px">NEGOCIO</span>' : ''}
+                ${tx.external_reference || tx.externalReference ? `<span style="background:rgba(14,165,233,0.15);color:#0EA5E9;font-size:0.55rem;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px" title="${tx.external_reference || tx.externalReference}">HUB</span>` : ''}
                 ${isHold ? '<span style="background:#f59e0b;color:#000;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:5px;letter-spacing:0.5px">HOLD</span>' : ''}
                 ${tx.source === 'ai-agent' || tx._aiModified ? '<span style="font-size:0.65rem;color:var(--text-muted);margin-left:4px">\ud83e\udd16 IA</span>' : ''}
               </div>
@@ -755,6 +757,17 @@ export default function renderTransactions() {
       const tarjetaSeleccionada = modal.querySelector('#tx-card')?.value || '';
       const usaTarjeta = tipo === 'gasto' && Boolean(tarjetaSeleccionada);
 
+      // Studio Business Hub — workspace mode auto-mark is_business
+      // - BUSINESS: todas las transacciones son de negocio
+      // - HYBRID: lee el checkbox #tx-business si existe
+      // - PERSONAL: nunca es business
+      const wsMode = (store.getCurrentWorkspace?.()?.mode || 'PERSONAL').toUpperCase();
+      const businessCheckbox = modal.querySelector('#tx-business');
+      const isBusiness =
+        wsMode === 'BUSINESS' ? true :
+        wsMode === 'HYBRID' ? Boolean(businessCheckbox?.checked) :
+        false;
+
       const data = {
         tipo,
         monto,
@@ -769,6 +782,7 @@ export default function renderTransactions() {
         notas: modal.querySelector('#tx-notes').value.trim(),
         aplicaDiezmo: tipoIngreso === 'prestamo' ? false : (modal.querySelector('#tx-diezmo')?.checked || false),
         beneficiarios: beneficiariosFinal,
+        isBusiness,
       };
 
       if (monto <= 0) { showToast('error', 'El monto debe ser mayor a 0'); return; }
