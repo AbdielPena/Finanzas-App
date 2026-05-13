@@ -1,5 +1,6 @@
 // ============================================
 // FinanzApp API — Servidor Express principal
+// (re-deploy forzado tras FTP fallido en el merge del hub-adapter PR)
 // ============================================
 import express from 'express';
 import cors from 'cors';
