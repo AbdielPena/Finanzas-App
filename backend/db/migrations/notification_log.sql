@@ -1,3 +1,5 @@
+SET search_path TO finanzapp, public, extensions;
+
 -- Tabla de log de notificaciones enviadas (audit + cooldown)
 -- Idempotente: si ya existe, no hace nada.
 

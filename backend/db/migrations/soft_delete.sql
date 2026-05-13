@@ -1,3 +1,7 @@
+-- Migrations corren contra el pooler de Supabase donde el schema 'finanzapp'
+-- requiere ser explicito en el search_path.
+SET search_path TO finanzapp, public, extensions;
+
 -- Soft delete + papelera (idempotente, autoaplicada al boot via auto-migrate.js)
 --
 -- Al borrar una entidad de negocio NO la eliminamos fisicamente; le

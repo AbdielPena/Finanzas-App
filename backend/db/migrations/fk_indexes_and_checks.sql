@@ -1,3 +1,6 @@
+-- Schema explicito: el pooler de Supabase no procesa ?options= en URL
+SET search_path TO finanzapp, public, extensions;
+
 -- Migration idempotente — se aplica automaticamente al arranque del backend
 -- (auto-migrate.js corre todos los .sql de este directorio).
 --

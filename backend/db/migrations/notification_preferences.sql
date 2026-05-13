@@ -1,3 +1,5 @@
+SET search_path TO finanzapp, public, extensions;
+
 -- Crea la tabla notification_preferences (faltaba en el schema inicial)
 -- Idempotente: si ya existe, no hace nada.
 
