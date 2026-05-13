@@ -29,7 +29,7 @@ const ENTITIES = [
 
   // --- transactions (the heart) ---
   { path: 'transactions',    table: 'transactions', orderBy: 'fecha DESC, created_at DESC',
-    fields: ['tipo','monto','descripcion','fecha','categoria_id','cuenta_id','cuenta_destino_id','tarjeta_id','tipo_ingreso','cliente_asociado','aplica_diezmo','estado','notas','beneficiarios'],
+    fields: ['tipo','monto','descripcion','fecha','categoria_id','cuenta_id','cuenta_destino_id','tarjeta_id','tipo_ingreso','cliente_asociado','aplica_diezmo','estado','notas','beneficiarios','is_business'],
     extraFilters: async (req, where, params) => {
       // Helpers de validacion de input (defensivas; los parametros van por
       // bind, pero un valor mal formado puede igual hacer fallar el query
@@ -121,6 +121,31 @@ export function mountEntities(app) {
       allowedFields: ent.fields,
       listOrderBy: ent.orderBy || 'created_at DESC',
       extraListFilters: ent.extraFilters,
+      afterCreate: ent.path === 'transactions'
+        ? async (row, req) => {
+            // Studio Business Hub — emit expense.created sólo si es business
+            try {
+              if (row.tipo === 'gasto' && row.is_business === true && !row.external_reference) {
+                const { emitToHub } = await import('../services/hub.service.js');
+                void emitToHub('expense.created', {
+                  externalReference: `finanzapp:transaction:${row.id}`,
+                  payload: {
+                    id: row.id,
+                    workspace_id: row.workspace_id,
+                    user_id: req.user?.id,
+                    amount: Number(row.monto),
+                    description: row.descripcion,
+                    occurred_at: row.fecha,
+                    client_name: row.cliente_asociado,
+                    category_id: row.categoria_id,
+                  },
+                });
+              }
+            } catch (e) {
+              console.warn('[entities] hub emit failed (non-fatal):', e?.message);
+            }
+          }
+        : undefined,
     });
     app.use(`/api/v1/${ent.path}`, authRequired, requireWorkspace, router);
   }

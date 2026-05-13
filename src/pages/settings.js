@@ -345,6 +345,38 @@ export default function renderSettings() {
           </div>
         </div>
 
+        <!-- Studio Business Hub — Modo del Workspace -->
+        <div class="card" style="margin-bottom:24px">
+          <div class="card-header"><h3>🔗 Modo del Workspace</h3></div>
+          <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:12px">
+            Define cómo se usará este workspace dentro de la suite Studio Business Hub.
+          </p>
+          <div id="workspace-mode-toggle" style="display:flex;flex-direction:column;gap:10px">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;cursor:pointer" data-mode-option>
+              <input type="radio" name="workspace-mode" value="PERSONAL" style="margin-top:3px">
+              <div>
+                <div style="font-weight:600">Personal</div>
+                <div style="font-size:0.78rem;color:var(--text-2)">Finanzas personales (diezmo, metas, deudas, suscripciones). Oculta integraciones del hub.</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;cursor:pointer" data-mode-option>
+              <input type="radio" name="workspace-mode" value="BUSINESS" style="margin-top:3px">
+              <div>
+                <div style="font-weight:600">Business</div>
+                <div style="font-size:0.78rem;color:var(--text-2)">Contabilidad del estudio. Recibe ingresos automáticos desde el hub cuando se cobran facturas en CRM Studio o Facturación.</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;cursor:pointer" data-mode-option>
+              <input type="radio" name="workspace-mode" value="HYBRID" style="margin-top:3px">
+              <div>
+                <div style="font-weight:600">Híbrido</div>
+                <div style="font-size:0.78rem;color:var(--text-2)">Ambos. Cada transacción puede marcarse como Personal o Negocio. Los dashboards se filtran por tipo.</div>
+              </div>
+            </label>
+          </div>
+          <div id="workspace-mode-status" style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;min-height:18px"></div>
+        </div>
+
       </div>
     </div>
   `;
@@ -629,6 +661,74 @@ export default function renderSettings() {
     updateBadge('valid');
     logAdminAction(wsId, wsId, 'CREDENTIAL_CHANGE', 'API Key actualizada y guardada');
   });
+
+  // ============================================================
+  // Studio Business Hub — Workspace mode toggle
+  // ============================================================
+  const modeRadios = page.querySelectorAll('input[name="workspace-mode"]');
+  const modeStatusEl = page.querySelector('#workspace-mode-status');
+  const apiBase = (typeof window !== 'undefined' && window.__API_BASE__) || '/api/v1';
+
+  async function loadWorkspaceMode() {
+    try {
+      const token = localStorage.getItem('finanzapp.access_token')
+        || (JSON.parse(localStorage.getItem('finanzapp.auth') || '{}').accessToken);
+      if (!token) return;
+      const res = await fetch(`${apiBase}/workspaces`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      const current = (json.data || []).find((w) => w.id === wsId) || json.data?.[0];
+      const mode = (current?.mode || 'PERSONAL').toUpperCase();
+      const target = page.querySelector(`input[name="workspace-mode"][value="${mode}"]`);
+      if (target) target.checked = true;
+      page.querySelectorAll('[data-mode-option]').forEach((lbl) => {
+        const input = lbl.querySelector('input');
+        lbl.style.borderColor = input.checked ? 'var(--accent-primary)' : 'var(--border)';
+        lbl.style.background = input.checked ? 'var(--accent-soft, rgba(124,58,237,0.08))' : 'transparent';
+      });
+      modeStatusEl.textContent = `Modo actual: ${mode}`;
+    } catch (e) {
+      modeStatusEl.textContent = 'No se pudo cargar el modo.';
+    }
+  }
+
+  modeRadios.forEach((radio) => {
+    radio.addEventListener('change', async () => {
+      const mode = radio.value;
+      modeStatusEl.textContent = `Guardando ${mode}…`;
+      try {
+        const token = localStorage.getItem('finanzapp.access_token')
+          || (JSON.parse(localStorage.getItem('finanzapp.auth') || '{}').accessToken);
+        if (!token) throw new Error('Sesión no encontrada');
+        const res = await fetch(`${apiBase}/workspaces/${wsId}/mode`, {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ mode }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j?.error || `HTTP ${res.status}`);
+        }
+        showToast('success', `Modo cambiado a ${mode}`);
+        modeStatusEl.textContent = `Modo actual: ${mode}`;
+        page.querySelectorAll('[data-mode-option]').forEach((lbl) => {
+          const input = lbl.querySelector('input');
+          lbl.style.borderColor = input.checked ? 'var(--accent-primary)' : 'var(--border)';
+          lbl.style.background = input.checked ? 'var(--accent-soft, rgba(124,58,237,0.08))' : 'transparent';
+        });
+      } catch (e) {
+        showToast('error', 'No se pudo cambiar el modo', e.message);
+        modeStatusEl.textContent = `Error: ${e.message}`;
+      }
+    });
+  });
+
+  void loadWorkspaceMode();
 
   return page;
 }

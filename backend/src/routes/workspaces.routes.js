@@ -14,7 +14,7 @@ router.use(authRequired);
 router.get('/', async (req, res, next) => {
   try {
     const r = await query(
-      `SELECT w.id, w.nombre, wm.rol, w.plan_id, p.codigo as plan_codigo, p.nombre as plan_nombre
+      `SELECT w.id, w.nombre, w.mode, wm.rol, w.plan_id, p.codigo as plan_codigo, p.nombre as plan_nombre
        FROM workspace_members wm
        JOIN workspaces w ON w.id = wm.workspace_id
        LEFT JOIN plans p ON p.id = w.plan_id
@@ -23,6 +23,32 @@ router.get('/', async (req, res, next) => {
       [req.user.id]
     );
     res.json({ data: r.rows });
+  } catch (e) { next(e); }
+});
+
+// ---------- PATCH /workspaces/:id/mode ----------
+// Cambiar entre PERSONAL / BUSINESS / HYBRID
+router.patch('/:id/mode', async (req, res, next) => {
+  try {
+    const memR = await query(
+      `SELECT rol FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (memR.rowCount === 0 || !['owner', 'admin'].includes(memR.rows[0].rol)) {
+      throw new HttpError(403, 'Sin permiso');
+    }
+
+    const mode = String(req.body?.mode || '').toUpperCase();
+    if (!['PERSONAL', 'BUSINESS', 'HYBRID'].includes(mode)) {
+      throw new HttpError(400, 'Modo inválido. Usa PERSONAL, BUSINESS o HYBRID');
+    }
+
+    const r = await query(
+      `UPDATE workspaces SET mode = $1 WHERE id = $2 RETURNING id, nombre, mode`,
+      [mode, req.params.id]
+    );
+    if (r.rowCount === 0) throw new HttpError(404, 'Workspace no existe');
+    res.json({ data: r.rows[0] });
   } catch (e) { next(e); }
 });
 
