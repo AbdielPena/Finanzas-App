@@ -39,7 +39,8 @@ jobs:
           [ -z "$SSH_HOST" ] && missing="$missing SSH_HOST"
           [ -z "$SSH_USER" ] && missing="$missing SSH_USER"
           [ -z "$SSH_KEY" ]  && missing="$missing SSH_PRIVATE_KEY"
-          [ -n "$missing" ] && { echo "::error::Faltan secrets:$missing"; exit 1; }
+          [ -z "$missing" ] || { echo "::error::Faltan secrets:$missing"; exit 1; }
+          echo "Secrets OK"
 
       - name: Setup SSH key
         env:
