@@ -4,6 +4,7 @@
 import store, { setActiveWorkspace } from './store.js';
 import { router } from './router.js';
 import { icon } from './icons.js';
+import { mountAppSwitcher } from './studio-app-switcher.js';
 import { initCategories } from './categories.js';
 import { generateAlerts, getUnreadCount } from './notifications.js';
 import { renderLogin } from './pages/login.js';
@@ -186,10 +187,9 @@ function showApp() {
 
       <!-- Sidebar -->
       <aside class="sidebar" id="sidebar">
-        <div class="sidebar-logo">
-          <div class="sidebar-logo-icon">${icon('wallet', 20)}</div>
-          <span class="sidebar-logo-text">FinanzApp</span>
-        </div>
+        <!-- AppSwitcher: header compartido del Studio Suite (reemplaza el
+             "FinanzApp" custom). currentSystem="finance" destaca este. -->
+        <div class="sidebar-logo" id="studio-switcher-mount" style="padding: 8px;"></div>
         <nav class="sidebar-nav">
           <div class="sidebar-section" data-section="principal">
             <button class="sidebar-section-title" type="button">
@@ -503,6 +503,14 @@ function showApp() {
       </div>
     </div>
   `;
+
+  // Mount AppSwitcher cross-system del Studio Suite (reemplaza el viejo
+  // "FinanzApp" del sidebar logo). Después del innerHTML para que el mount
+  // node exista.
+  const switcherMount = document.getElementById('studio-switcher-mount');
+  if (switcherMount) {
+    mountAppSwitcher({ container: switcherMount, currentSystem: 'finance' });
+  }
 
   // Setup navigation routing — incluye right panel (rp-top-btn, rp-pcard)
   document.querySelectorAll('.nav-item[data-route], .header-action[data-route], .bottom-nav-item[data-route], .rp-top-btn[data-route], .rp-pcard[data-route]').forEach(item => {
