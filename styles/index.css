@@ -3,6 +3,12 @@
    Dual palette: warm light (coral+violet) + cinematic dark (violet+pink)
    ============================================ */
 
+/* Studio Suite — tokens compartidos cross-system (--studio-* vars).
+   No sobreescribe el design system propio; solo agrega tokens compartidos
+   (paleta brand del Suite + acentos por subapp + shadows + radii).
+   Usado por widgets cross-system como AppSwitcher. */
+@import url('./tokens-shared.css');
+
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');
 
 /* =========================================================
