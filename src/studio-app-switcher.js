@@ -72,9 +72,11 @@ function injectStyles() {
       padding: 8px 12px; border-radius: 12px;
       border: 1px solid rgba(0,0,0,0.08);
       background: rgba(255,255,255,0.5);
-      cursor: pointer; font-family: inherit; text-align: left;
+      cursor: pointer; text-align: left;
       transition: background 200ms var(--studio-ease-out, ease);
       color: inherit;
+      font-family: var(--studio-font-sans, 'Inter', system-ui, sans-serif);
+      font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     }
     [data-theme='dark'] .studio-switcher__btn { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
     .studio-switcher__btn:hover { background: rgba(0,0,0,0.05); }
@@ -99,6 +101,7 @@ function injectStyles() {
       transition: opacity 180ms var(--studio-ease-out, ease), transform 180ms var(--studio-ease-out, ease);
       pointer-events: none; z-index: 100;
       max-height: 75vh; overflow-y: auto;
+      font-family: var(--studio-font-sans, 'Inter', system-ui, sans-serif);
     }
     [data-theme='dark'] .studio-switcher__menu { background: hsl(240 8% 7%); border-color: rgba(255,255,255,0.1); }
     .studio-switcher.is-open .studio-switcher__menu { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
