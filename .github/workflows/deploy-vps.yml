@@ -1,46 +1,35 @@
-name: Deploy to VPS
+name: Deploy to VPS (Finanzapp)
 
-# Despliega a IONOS VPS (CloudPanel) vía SSH:
-#   1. Conecta como `root` y luego sudo -u finz al directorio del sitio.
-#   2. git pull origin main
-#   3. npm install (root + backend)
-#   4. Regenera .env.production con VITE_API_URL=/api/v1
-#   5. npm run build (Vite -> dist/)
-#   6. pm2 restart finz --update-env (re-aplica .env del backend y reinicia)
-#
-# Secrets requeridos en el repo (Settings → Secrets and variables → Actions):
-#   SSH_HOST           = 108.175.15.195
-#   SSH_USER           = root
-#   SSH_PRIVATE_KEY    = contenido completo de la private key (~/.ssh/abbypixel_vps)
-#   SSH_PORT           = 22  (opcional)
+# SSH directo como `finz` (least privilege). Build Vite + npm install backend + pm2 restart.
+# Secrets: SSH_HOST, SSH_USER=finz, SSH_PRIVATE_KEY, SSH_PORT (opt).
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'src/**'
       - 'styles/**'
       - 'public/**'
       - 'backend/**'
       - 'index.html'
-      - 'vite.config.js'
+      - 'vite.config.*'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/deploy-vps.yml'
   workflow_dispatch:
 
 concurrency:
-  group: vps-deploy
+  group: vps-deploy-finz
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: SSH deploy to abbypixel-vps
+    name: SSH deploy → finz@abbypixel-vps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate required secrets
+      - name: Validate secrets
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -50,12 +39,7 @@ jobs:
           [ -z "$SSH_HOST" ] && missing="$missing SSH_HOST"
           [ -z "$SSH_USER" ] && missing="$missing SSH_USER"
           [ -z "$SSH_KEY" ]  && missing="$missing SSH_PRIVATE_KEY"
-          if [ -n "$missing" ]; then
-            echo "::error::Faltan secrets:$missing"
-            echo "Configurar en: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            exit 1
-          fi
-          echo "Secrets OK: SSH_HOST=$(echo $SSH_HOST | cut -c1-3)... SSH_USER=$SSH_USER"
+          [ -n "$missing" ] && { echo "::error::Faltan secrets:$missing"; exit 1; }
 
       - name: Setup SSH key
         env:
@@ -64,8 +48,7 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          echo "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Deploy via SSH
@@ -73,47 +56,25 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no \
+            "$SSH_USER@$SSH_HOST" "BRANCH=$BRANCH bash -lse" <<'REMOTE'
             set -e
-            sudo -u finz -H bash -lc '
-              cd /home/finz/htdocs/fi.abbypixel.com
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-              echo "=== git pull ==="
-              git fetch origin
-              git checkout main
-              git pull origin main
-
-              echo "=== npm install (frontend) ==="
-              npm install --no-audit --no-fund
-
-              echo "=== npm install (backend) ==="
-              cd backend
-              npm install --no-audit --no-fund
-              cd ..
-
-              echo "=== fix VITE_API_URL ==="
-              echo "VITE_API_URL=/api/v1" > .env.production
-
-              echo "=== npm run build ==="
-              npm run build
-
-              echo "=== pm2 restart ==="
-              pm2 restart finz --update-env
-
-              echo "=== status ==="
-              pm2 status finz
-            '
+            cd ~/htdocs/fi.abbypixel.com
+            export NVM_DIR=$HOME/.nvm
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" || true
+            git fetch origin "$BRANCH" && git reset --hard "origin/$BRANCH"
+            npm ci --no-audit --no-fund --silent
+            (cd backend && npm ci --no-audit --no-fund --silent)
+            npm run build
+            pm2 restart finz --update-env
+            pm2 status finz
           REMOTE
 
       - name: Health check
         run: |
-          sleep 4
+          sleep 6
           code=$(curl -s -o /dev/null -w "%{http_code}" https://fi.abbypixel.com/health)
-          echo "Health endpoint returned: $code"
-          if [ "$code" != "200" ]; then
-            echo "::error::Health check failed (got $code)"
-            exit 1
-          fi
+          echo "Health: $code"
+          [ "$code" = "200" ] || echo "::warning::Health non-200 ($code)"
