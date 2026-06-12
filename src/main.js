@@ -757,28 +757,13 @@ function showApp() {
     cleanupRefs.push(off);
   });
 
-  let _resyncInFlight = false;
-  async function resyncFromBackend() {
-    if (_resyncInFlight) return;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-    if (document.hidden) return;
-    _resyncInFlight = true;
-    try {
-      await store.bootstrap();
-      router.refresh();
-    } catch (e) {
-      console.debug('[resync] fallo silencioso:', e?.message || e);
-    } finally {
-      _resyncInFlight = false;
-    }
-  }
-  const _resyncInterval = setInterval(() => { if (!document.hidden) resyncFromBackend(); }, 30_000);
-  cleanupRefs.push(() => clearInterval(_resyncInterval));
-
-  // NOTA: antes había un resync en `focus` y `visibilitychange` que re-renderizaba
-  // toda la vista (router.refresh) cada vez que volvías a la pestaña → se veía como
-  // un "refresh" molesto y perdía scroll/estado. Lo quitamos: el intervalo de 30s
-  // (arriba) ya mantiene los datos frescos en segundo plano sin el salto visual.
+  // AUTO-RESYNC ELIMINADO POR COMPLETO (2026-06-12).
+  // Antes había: (1) un intervalo de 30s y (2) listeners de `focus`/`visibilitychange`
+  // que llamaban store.bootstrap() + router.refresh() → re-renderizaban TODA la vista
+  // sola, cada 30s y al volver a la pestaña. Eso se veía como un "refresh" constante y
+  // molesto (perdía scroll/estado). Ya no hay ningún resync automático: los datos se
+  // actualizan al navegar y al crear/editar/borrar (la reactividad de store.on sigue
+  // intacta), que es lo único que el usuario realmente necesita.
 
   // Init AI Chat (FAB + Drawer)
   initAIChat();
