@@ -106,18 +106,18 @@ class Store {
         return;
       }
 
-      // Detectar items locales NO presentes en backend (orfanos)
-      // Solo recuperamos si el resource API existe (entidades de negocio)
-      if (RESOURCES[col] && api[RESOURCES[col]] && localList.length > backendList.length) {
-        const backendIds = new Set(backendList.map(b => b.id));
-        const orphans = localList.filter(l => l.id && !backendIds.has(l.id));
-        if (orphans.length > 0) {
-          console.log(`[store] auto-recovery: ${orphans.length} ${col} pendientes de sincronizar`);
-          orphans.forEach(orphan => recoveryQueue.push({ collection: col, item: orphan }));
-        }
-      }
+      // AUTO-RECOVERY DESACTIVADO (2026-06-12).
+      // Antes: si localStorage tenía items que el backend no conocía (orfanos),
+      // se re-empujaban al backend con POST en cada bootstrap. Era un parche para
+      // un bug viejo de UUIDs (ya corregido), pero es INDISCRIMINADO: no distingue
+      // un registro que el usuario BORRÓ de uno perdido por bug, así que re-creaba
+      // en segundos cualquier dato eliminado desde el servidor → borrar era imposible.
+      // Ahora el backend es la ÚNICA fuente de verdad: lo que no está en el backend,
+      // no existe. (El flujo normal de creación ya hace POST inmediato, así que no
+      // se pierde nada creado estando online.)
+      void localList; // se mantiene solo para el fallback de abajo si el fetch falla
 
-      // El backend siempre gana en datos que SÍ tiene
+      // El backend siempre gana
       this._cache[col] = backendList;
     });
 
