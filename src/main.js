@@ -775,14 +775,10 @@ function showApp() {
   const _resyncInterval = setInterval(() => { if (!document.hidden) resyncFromBackend(); }, 30_000);
   cleanupRefs.push(() => clearInterval(_resyncInterval));
 
-  const _onFocus = () => resyncFromBackend();
-  const _onVisibility = () => { if (!document.hidden) resyncFromBackend(); };
-  window.addEventListener('focus', _onFocus);
-  document.addEventListener('visibilitychange', _onVisibility);
-  cleanupRefs.push(() => {
-    window.removeEventListener('focus', _onFocus);
-    document.removeEventListener('visibilitychange', _onVisibility);
-  });
+  // NOTA: antes había un resync en `focus` y `visibilitychange` que re-renderizaba
+  // toda la vista (router.refresh) cada vez que volvías a la pestaña → se veía como
+  // un "refresh" molesto y perdía scroll/estado. Lo quitamos: el intervalo de 30s
+  // (arriba) ya mantiene los datos frescos en segundo plano sin el salto visual.
 
   // Init AI Chat (FAB + Drawer)
   initAIChat();
