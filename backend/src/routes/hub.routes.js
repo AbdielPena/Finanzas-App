@@ -56,8 +56,46 @@ router.get('/sso', async (req, res, next) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const targetUrl = new URL(redirect, frontendUrl).toString();
 
-    // HTML mínimo que setea localStorage y redirige.
-    // JWTs son base64.JSON (sin caracteres especiales), seguros para inline JSON.stringify.
+    // El owner del workspace se mapea al rol 'admin' (igual que loginUser en
+    // el frontend). Construimos las MISMAS estructuras que deja un login normal
+    // para que los getters síncronos (auth.js / api-client.js) reconozcan la
+    // sesión. El SSO antes escribía claves con punto (finanzapp.auth) que NADIE
+    // leía → el usuario llegaba sin sesión. Ahora poblamos las claves canónicas.
+    const role = 'admin';
+    const nowIso = new Date().toISOString();
+    const avatar = String(user.nombre || user.email || '?').trim().charAt(0).toUpperCase();
+
+    const localUser = {
+      id: user.id,
+      email: user.email,
+      nombre: user.nombre,
+      avatar,
+      isSuperAdmin: user.is_super_admin === true,
+      activo: true,
+      estado: 'activo',
+      workspaces: workspace ? [{ workspaceId: workspace.id, role }] : [],
+      createdAt: nowIso,
+    };
+    const localWs = workspace
+      ? {
+          id: workspace.id,
+          nombre: workspace.nombre,
+          ownerId: user.id,
+          members: [{ userId: user.id, role }],
+          role,
+          createdAt: nowIso,
+        }
+      : null;
+    const session = {
+      userId: user.id,
+      workspaceId: workspace?.id || null,
+      role,
+      nombre: user.nombre,
+      avatar,
+    };
+
+    // HTML mínimo que pobla localStorage (las claves que SÍ lee el SPA) y
+    // redirige. JWT/JSON sin caracteres especiales → seguros para inline.
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.set('Cache-Control', 'no-store');
     res.send(`<!doctype html>
@@ -66,21 +104,51 @@ router.get('/sso', async (req, res, next) => {
 <body style="font-family:system-ui;display:grid;place-items:center;min-height:100dvh;color:#666">
   <p>Iniciando sesión en FinanzApp…</p>
   <script>
-    try {
-      var auth = ${JSON.stringify({
-        accessToken: access,
-        workspaceId: workspace?.id || null,
-        user: { id: user.id, email: user.email, nombre: user.nombre },
-        via: 'hub-sso',
-        at: Date.now(),
-      })};
-      localStorage.setItem('finanzapp.auth', JSON.stringify(auth));
-      localStorage.setItem('finanzapp.access_token', auth.accessToken);
-      if (auth.workspaceId) localStorage.setItem('finanzapp.workspace_id', auth.workspaceId);
-      window.location.replace(${JSON.stringify(targetUrl)});
-    } catch (e) {
-      document.body.innerHTML = '<p>Error al guardar sesión: ' + e.message + '</p>';
-    }
+    (function () {
+      try {
+        var access = ${JSON.stringify(access)};
+        var user = ${JSON.stringify(localUser)};
+        var ws = ${JSON.stringify(localWs)};
+        var session = ${JSON.stringify(session)};
+        var target = ${JSON.stringify(targetUrl)};
+
+        function mergeById(key, item, idField) {
+          var arr = [];
+          try { arr = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { arr = []; }
+          if (!Array.isArray(arr)) arr = [];
+          arr = arr.filter(function (x) { return x && x[idField] !== item[idField]; });
+          arr.push(item);
+          localStorage.setItem(key, JSON.stringify(arr));
+        }
+
+        // 1. User + workspace en el cache que leen los getters sincronos
+        mergeById('finanzapp_users', user, 'id');
+        if (ws) mergeById('finanzapp_workspaces', ws, 'id');
+
+        // 2. Sesion activa. La escribimos en localStorage: la app nativa
+        //    (WebView/Capacitor) la lee directo y el navegador web la lee por
+        //    el fallback de getSession(). Limpiamos duplicados previos.
+        localStorage.removeItem('finanzapp_session');
+        sessionStorage.removeItem('finanzapp_session');
+        localStorage.setItem('finanzapp_session', JSON.stringify(session));
+
+        // 3. Token de acceso + workspace activo para el api-client
+        localStorage.setItem('finanzapp_access_token', access);
+        if (ws) localStorage.setItem('finanzapp_active_ws', ws.id);
+
+        // 4. Espejo al storage nativo (widget Android) — best effort
+        try {
+          if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) {
+            window.Capacitor.Plugins.Preferences.set({ key: 'jwt_access', value: access });
+            if (ws) window.Capacitor.Plugins.Preferences.set({ key: 'workspace_id', value: ws.id });
+          }
+        } catch (e) {}
+
+        window.location.replace(target);
+      } catch (e) {
+        document.body.innerHTML = '<p>Error al iniciar sesión: ' + (e && e.message ? e.message : e) + '</p>';
+      }
+    })();
   </script>
 </body></html>`);
   } catch (e) {

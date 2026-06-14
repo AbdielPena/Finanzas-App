@@ -152,7 +152,7 @@ export function mountAppSwitcher({ container, currentSystem = 'hub', collapsed =
     return `
       <a class="studio-switcher__item ${isCurrent ? 'studio-switcher__item--current' : ''}"
          href="${sys.href}"
-         ${sys.id === 'hub' ? '' : 'target="_blank" rel="noopener noreferrer"'}
+         target="_self"
          role="menuitem">
         <span class="studio-switcher__icon" style="background: hsl(${sys.accent} / 0.12); color: hsl(${sys.accent});">${sys.icon}</span>
         <span class="studio-switcher__text">
