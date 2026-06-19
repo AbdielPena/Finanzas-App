@@ -82,8 +82,8 @@ export function renderLogin(onSuccess) {
     div.style.cssText = 'width:100%;max-width:420px';
     div.innerHTML = `
       <div style="text-align:center;margin-bottom:36px">
-        <div style="font-size:2.8rem;margin-bottom:12px">💰</div>
-        <h1 style="font-family:var(--font-heading);font-size:1.8rem;color:var(--text-primary);margin:0">FinanzApp</h1>
+        <span class="brand-logo" style="color:var(--text-primary);height:36px;width:160px;margin:0 auto 12px;display:inline-block"></span>
+        <h1 style="font-family:var(--font-heading);font-size:1.4rem;color:var(--text-primary);margin:0">Finanzas</h1>
         <p style="color:var(--text-muted);font-size:0.9rem;margin-top:6px">Tu asistente financiero inteligente</p>
       </div>
 
