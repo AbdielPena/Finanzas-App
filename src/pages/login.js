@@ -231,8 +231,8 @@ export function renderLogin(onSuccess) {
     div.style.cssText = 'width:100%;max-width:460px';
     div.innerHTML = `
       <div style="text-align:center;margin-bottom:28px">
-        <div style="font-size:2.4rem;margin-bottom:8px">🚀</div>
-        <h1 style="font-family:var(--font-heading);font-size:1.6rem;margin:0">Crear cuenta</h1>
+        <span class="brand-logo" style="color:var(--text-primary);height:32px;width:150px;margin:0 auto 10px;display:inline-block"></span>
+        <h1 style="font-family:var(--font-heading);font-size:1.5rem;margin:0">Crear cuenta</h1>
         <p style="color:var(--text-muted);font-size:0.85rem;margin-top:6px">Tu información y datos son completamente privados</p>
       </div>
 
